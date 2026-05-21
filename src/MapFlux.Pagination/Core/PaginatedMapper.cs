@@ -29,4 +29,21 @@ public class PaginatedMapper<TSource, TDest> : IPaginatedMapper<TSource, TDest>
         
         return new PagedResult<TDest>(mappedItems, source.TotalCount, source.PageNumber, source.PageSize);
     }
+
+    public async Task<ICursorPagedResult<TDest>> MapCursorPagedAsync(
+        IQueryable<TSource> source,
+        CursorPaginationOptions opts,
+        CancellationToken ct = default)
+    {
+        var pagedSource = await source.ToCursorPagedAsync(opts, ct);
+        var mappedItems = _mapper.MapList<TSource, TDest>(pagedSource.Items);
+
+        return new CursorPagedResult<TDest>(
+            mappedItems,
+            pagedSource.StartCursor,
+            pagedSource.EndCursor,
+            pagedSource.HasNextPage,
+            pagedSource.HasPreviousPage,
+            pagedSource.TotalCount);
+    }
 }
