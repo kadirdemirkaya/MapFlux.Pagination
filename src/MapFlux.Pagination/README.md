@@ -1,6 +1,6 @@
 # MapFlux.Pagination
 
-Advanced Pagination + Object Mapping library for .NET 6.0, 7.0, 8.0, and 9.0, powered by [MapFlux](https://github.com/kadirdemirkaya/MapFlux) and Entity Framework Core.
+Advanced Pagination + Object Mapping library for .NET 6.0, 7.0, 8.0, and 9.0, powered by MapFlux and Entity Framework Core.
 
 MapFlux.Pagination allows you to query, filter, sort, and paginate database entities, and automatically map them directly to DTOs in a single database roundtrip.
 
@@ -9,18 +9,16 @@ MapFlux.Pagination allows you to query, filter, sort, and paginate database enti
 ## Features
 
 - ⚡ **Automatic Mapping**: Maps database entities directly to DTOs using MapFlux.
-- 🔍 **Dynamic Filtering**: Property-based filtering with support for operators like Equals, Contains, GreaterThan, etc.
+- 🔍 **Dynamic Filtering**: Property-based filtering with operators like Equals, Contains, GreaterThan, etc.
 - 🔀 **Multi-Column Sorting**: Order by multiple fields dynamically.
-- 🔎 **Global Search**: Search across multiple string properties simultaneously.
-- ⏳ **Cursor-Based Pagination**: High-performance keyset pagination using base64 encoded cursors.
-- 💾 **In-Memory Pagination**: Support for pagination on standard in-memory lists/collections.
+- 🔎 **Global Search**: Case-insensitive search across multiple string properties.
+- ⏳ **Cursor-Based Pagination**: High-performance keyset pagination for large datasets.
+- 💾 **In-Memory Pagination**: Paginate standard in-memory lists/collections.
 - 🛡️ **Input Validation & Safety**: Guardrails against invalid page arguments.
 
 ---
 
 ## Installation
-
-Install the package via .NET CLI:
 
 ```bash
 dotnet add package MapFlux.Pagination
@@ -30,9 +28,24 @@ dotnet add package MapFlux.Pagination
 
 ## Quick Start
 
-### 1. Register in `Program.cs`
+### 1. Define a Mapping Profile
 
-Register MapFlux Pagination with your mapping profiles:
+Create a MapFlux mapping profile to define how your entity maps to a DTO:
+
+```csharp
+using MapFlux;
+
+public class UserProfile : IMapProfile
+{
+    public void Configure(IProfileExpression expression)
+    {
+        expression.CreateMap<User, UserDto>()
+            .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.Name));
+    }
+}
+```
+
+### 2. Register in `Program.cs`
 
 ```csharp
 using MapFlux.Pagination.Extensions;
@@ -43,7 +56,7 @@ builder.Services.AddMapFluxPagination(cfg =>
 });
 ```
 
-You can optionally configure global default and maximum page limits:
+Optionally configure global limits:
 
 ```csharp
 builder.Services.AddMapFluxPagination(
@@ -55,15 +68,9 @@ builder.Services.AddMapFluxPagination(
     });
 ```
 
-### 2. Inject and Use in Controllers
-
-Inject `IPaginatedMapper<TSource, TDest>` into your Controller/Service:
+### 3. Use in Controller
 
 ```csharp
-using Microsoft.AspNetCore.Mvc;
-using MapFlux.Pagination.Abstractions;
-using MapFlux.Pagination.Models;
-
 [ApiController]
 [Route("api/users")]
 public class UsersController : ControllerBase
@@ -81,22 +88,53 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> GetUsers([FromQuery] int page = 1, [FromQuery] int size = 10)
     {
         var opts = new PaginationOptions { PageNumber = page, PageSize = size };
-        
-        // Applies pagination and maps entities to DTOs in one database query
-        IPagedResult<UserDto> result = await _mapper.MapPagedAsync(_db.Users, opts);
-        
+        var result = await _mapper.MapPagedAsync(_db.Users, opts);
         return Ok(result);
     }
 }
 ```
 
+Response:
+
+```json
+{
+  "items": [
+    { "fullName": "John Doe", "email": "john@example.com" }
+  ],
+  "totalCount": 150,
+  "pageNumber": 1,
+  "pageSize": 10,
+  "totalPages": 15,
+  "hasPreviousPage": false,
+  "hasNextPage": true,
+  "firstItemIndex": 1,
+  "lastItemIndex": 10
+}
+```
+
 ---
 
-## Key Usage Scenarios
+## Usage Without Mapping
 
-### Dynamic Filtering & Multi-Sorting
+If you don't need DTO mapping, use the `IQueryable` extension directly:
 
-Apply filters and sorting on the fly using `PaginationOptions`:
+```csharp
+using MapFlux.Pagination.Extensions;
+
+var opts = new PaginationOptions { PageNumber = 1, PageSize = 10 };
+IPagedResult<User> result = await _db.Users.ToPagedAsync(opts);
+```
+
+For in-memory collections:
+
+```csharp
+List<User> users = GetCachedUsers();
+IPagedResult<User> result = users.ToPaged(opts);
+```
+
+---
+
+## Dynamic Filtering & Multi-Sorting
 
 ```csharp
 var opts = new PaginationOptions
@@ -112,15 +150,19 @@ var opts = new PaginationOptions
     {
         new() { PropertyName = "LastName", Descending = false },
         new() { PropertyName = "CreatedAt", Descending = true }
-    }
+    },
+    SearchTerm = "john",
+    SearchProperties = new[] { "FirstName", "LastName", "Email" }
 };
 
-var pagedUsers = await _mapper.MapPagedAsync(_db.Users, opts);
+var result = await _mapper.MapPagedAsync(_db.Users, opts);
 ```
 
-### Cursor-Based Pagination (Keyset Pagination)
+---
 
-For high-performance pagination on large datasets:
+## Cursor-Based Pagination
+
+For high-performance pagination on large datasets (avoids `OFFSET` performance degradation):
 
 ```csharp
 [HttpGet("cursor")]
@@ -129,7 +171,7 @@ public async Task<IActionResult> GetUsersCursor([FromQuery] string? after, [From
     var opts = new CursorPaginationOptions 
     { 
         PageSize = size,
-        After = after, // Pass the previous page's EndCursor
+        After = after,
         CursorProperty = "Id"
     };
 
@@ -138,8 +180,21 @@ public async Task<IActionResult> GetUsersCursor([FromQuery] string? after, [From
 }
 ```
 
+Response:
+
+```json
+{
+  "items": [ ... ],
+  "startCursor": "eyJJZCI6MX0=",
+  "endCursor": "eyJJZCI6MjB9",
+  "hasNextPage": true,
+  "hasPreviousPage": false,
+  "totalCount": 50000
+}
+```
+
 ---
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License
