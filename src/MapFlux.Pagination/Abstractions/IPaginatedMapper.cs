@@ -10,4 +10,12 @@ public interface IPaginatedMapper<TSource, TDest>
         CancellationToken ct = default);
 
     IPagedResult<TDest> MapPaged(IPagedResult<TSource> source);
+
+    /// <summary>
+    /// Cursor-based pagination with mapping.
+    /// </summary>
+    Task<ICursorPagedResult<TDest>> MapCursorPagedAsync(
+        IQueryable<TSource> source,
+        CursorPaginationOptions opts,
+        CancellationToken ct = default);
 }
