@@ -50,4 +50,22 @@ public class GlobalOptionsTests
         var paginatedMapper = provider.GetService<IPaginatedMapper<User, UserDto>>();
         Assert.NotNull(paginatedMapper);
     }
+
+    [Fact]
+    public void AddMapFluxPagination_WithoutGlobalOptions_ShouldStillResolvePaginatedMapper()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddMapFluxPagination(cfg => cfg.AddProfile<UserProfile>());
+
+        var provider = services.BuildServiceProvider();
+
+        // Assert
+        Assert.Null(provider.GetService<PaginationGlobalOptions>());
+
+        var paginatedMapper = provider.GetService<IPaginatedMapper<User, UserDto>>();
+        Assert.NotNull(paginatedMapper);
+    }
 }

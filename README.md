@@ -56,7 +56,8 @@ builder.Services.AddMapFluxPagination(cfg =>
 });
 ```
 
-Optionally configure global limits:
+Optionally configure global limits. `MaxPageSize` is enforced by `IPaginatedMapper<,>`: a
+`PaginationOptions.PageSize` above the configured limit is clamped down to it before the query runs.
 
 ```csharp
 builder.Services.AddMapFluxPagination(

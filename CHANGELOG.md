@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `PaginationGlobalOptions.MaxPageSize` is now enforced: `IPaginatedMapper<,>.MapPagedAsync` and
+  `MapCursorPagedAsync` clamp the requested `PageSize` down to the configured limit before running
+  the query, instead of the registered options being ignored. A caller that has configured a limit
+  and requests more than it now gets the limit back instead of the full requested page size. Callers
+  that never registered `PaginationGlobalOptions`, and the DI-independent `ToPagedAsync` /
+  `ToCursorPagedAsync` extension methods, are unaffected.
+
 ### Added
 
 - Opt-in `PaginationOptions.StrictMode`: when enabled, an unknown filter/search/sort property, a

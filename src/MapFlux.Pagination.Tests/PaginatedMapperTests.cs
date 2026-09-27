@@ -1,6 +1,7 @@
 using MapFlux;
 using MapFlux.Pagination.Core;
 using MapFlux.Pagination.Models;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,6 +20,14 @@ public class PaginatedMapperTests
         {
             cfg.CreateMap<User, UserDto>(opt => opt.ForMember(d => d.FullName, m => m.MapFrom(s => s.Name)));
         }
+    }
+
+    private class UserDbContext : DbContext
+    {
+        public DbSet<User> Users => Set<User>();
+
+        protected override void OnConfiguring(DbContextOptionsBuilder options)
+            => options.UseInMemoryDatabase("paginatedmapper_" + System.Guid.NewGuid());
     }
 
     [Fact]
@@ -96,5 +105,76 @@ public class PaginatedMapperTests
         // Assert
         Assert.Equal("Zebra", result[0].Name);
         Assert.Equal("Apple", result[1].Name);
+    }
+
+    [Fact]
+    public async Task MapPagedAsync_WithGlobalMaxPageSize_ShouldClampRequestedPageSize()
+    {
+        // Arrange
+        var mapper = new Mapper();
+        mapper.CreateMap<UserProfile>();
+
+        var globalOptions = new PaginationGlobalOptions { MaxPageSize = 5 };
+        var paginatedMapper = new PaginatedMapper<User, UserDto>(mapper, globalOptions);
+
+        using var context = new UserDbContext();
+        context.Users.AddRange(Enumerable.Range(1, 20).Select(i => new User { Id = i, Name = $"User{i}" }));
+        await context.SaveChangesAsync();
+
+        var opts = new PaginationOptions { PageNumber = 1, PageSize = 1000 };
+
+        // Act
+        var result = await paginatedMapper.MapPagedAsync(context.Users.AsQueryable(), opts);
+
+        // Assert
+        Assert.Equal(5, result.PageSize);
+        Assert.Equal(5, result.Items.Count);
+        Assert.Equal(20, result.TotalCount);
+    }
+
+    [Fact]
+    public async Task MapPagedAsync_WithoutGlobalOptions_ShouldNotClampPageSize()
+    {
+        // Arrange
+        var mapper = new Mapper();
+        mapper.CreateMap<UserProfile>();
+
+        var paginatedMapper = new PaginatedMapper<User, UserDto>(mapper);
+
+        using var context = new UserDbContext();
+        context.Users.AddRange(Enumerable.Range(1, 20).Select(i => new User { Id = i, Name = $"User{i}" }));
+        await context.SaveChangesAsync();
+
+        var opts = new PaginationOptions { PageNumber = 1, PageSize = 1000 };
+
+        // Act
+        var result = await paginatedMapper.MapPagedAsync(context.Users.AsQueryable(), opts);
+
+        // Assert
+        Assert.Equal(1000, result.PageSize);
+        Assert.Equal(20, result.Items.Count);
+    }
+
+    [Fact]
+    public async Task MapCursorPagedAsync_WithGlobalMaxPageSize_ShouldClampRequestedPageSize()
+    {
+        // Arrange
+        var mapper = new Mapper();
+        mapper.CreateMap<UserProfile>();
+
+        var globalOptions = new PaginationGlobalOptions { MaxPageSize = 5 };
+        var paginatedMapper = new PaginatedMapper<User, UserDto>(mapper, globalOptions);
+
+        using var context = new UserDbContext();
+        context.Users.AddRange(Enumerable.Range(1, 20).Select(i => new User { Id = i, Name = $"User{i}" }));
+        await context.SaveChangesAsync();
+
+        var opts = new CursorPaginationOptions { PageSize = 1000, SortBy = "Id" };
+
+        // Act
+        var result = await paginatedMapper.MapCursorPagedAsync(context.Users.AsQueryable(), opts);
+
+        // Assert
+        Assert.Equal(5, result.Items.Count);
     }
 }
