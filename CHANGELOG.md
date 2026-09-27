@@ -34,6 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   query runs and `TotalCount` on the result is `-1`; `HasNextPage` / `HasPreviousPage` are unaffected,
   since they were already derived from the page query, not the count.
 
+### Changed
+
+- Building a query now reuses cached reflection instead of repeating it on every call. The property
+  lookup table (case-insensitive, as before), the `[Key]`/`Id` candidate, the list of public `string`
+  properties used by an unnamed search, the `string` methods the filter and search stages call, the
+  `CompareTo` method a custom cursor type is compared with, and the `Queryable` ordering methods are all
+  resolved once per type and kept in a `ConcurrentDictionary`. `QueryableHelper.ApplyFullPipeline` with
+  three filters, a search term and a sort measures **7.3–7.9 µs/op and 5368–5600 B/op**, down from
+  **12.4–13.3 µs/op and 9352–9472 B/op** — about 41 % less time and 42 % fewer allocations. The
+  generated expression tree, the accepted property names and every result are unchanged, including the
+  `AmbiguousMatchException` a type with two properties differing only in case has always produced.
+
 ### Fixed
 
 - Calling `AddMapFluxPagination` more than once no longer loses the earlier call's profiles or
