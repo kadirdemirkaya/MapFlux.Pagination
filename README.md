@@ -173,6 +173,12 @@ JSON numbers, strings and booleans are converted to the target property's type �
 }
 ```
 
+A text value is parsed with the invariant culture first and with the current culture second, so the
+same request behaves the same on every server: `"2026-01-01T10:00:01Z"` keeps its UTC instant on a
+`DateTime` or `DateTimeOffset` property instead of shifting to the server's local time, `"5.5"`
+reaches a `decimal` where the culture uses a decimal comma — and `"5,5"` still reaches it there too —
+and `Guid`, `DateOnly` and `TimeOnly` properties accept their usual text form.
+
 ---
 
 ## Cursor-Based Pagination
