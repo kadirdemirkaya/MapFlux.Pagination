@@ -203,6 +203,45 @@ var result = await _mapper.MapPagedAsync(_db.Users, opts);
 `StrictMode` covers `Filters`, `SearchProperties` and sorting (`SortBy` / `SortCriterias`) alike. It is
 recommended for new code; existing callers keep today's silent behaviour until they opt in.
 
+### Deterministic Page Order
+
+A page request that names no sort order translates to `LIMIT`/`OFFSET` with no `ORDER BY`, and a
+relational database is then free to return rows in any order — the same row can appear on two pages, or
+on none. Two opt-in settings add a fallback order that only applies when the request itself did not
+produce one (`SortBy` and `SortCriterias` always win):
+
+```csharp
+var opts = new PaginationOptions
+{
+    PageNumber = 1,
+    PageSize = 20,
+    DefaultSortProperty = "CreatedAt",
+    EnsureDeterministicOrder = true
+};
+```
+
+- `DefaultSortProperty` orders ascending by the named property.
+- `EnsureDeterministicOrder` falls back to the entity's key — the property marked with `[Key]`,
+  otherwise `Id` or `<TypeName>Id`, matched case-insensitively — when `DefaultSortProperty` is unset or
+  names a property the type does not have.
+
+Both can also be configured once for every `IPaginatedMapper<,>` call, and a per-request value wins over
+the configured one:
+
+```csharp
+builder.Services.AddMapFluxPagination(
+    cfg => cfg.AddProfile<UserProfile>(),
+    opts =>
+    {
+        opts.DefaultSortProperty = "CreatedAt";
+        opts.EnsureDeterministicOrder = true;
+    });
+```
+
+Both default to off, so the generated SQL of an existing request is unchanged until you opt in. When a
+property cannot be resolved and no key is found either, the query stays unordered — unless `StrictMode`
+is on, which turns it into a `PaginationStrictModeException`.
+
 ---
 
 ## Cursor-Based Pagination

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in deterministic page order for offset pagination: `PaginationOptions.DefaultSortProperty` orders
+  ascending by the named property, and `PaginationOptions.EnsureDeterministicOrder` falls back to the
+  entity's key (`[Key]`, otherwise `Id` or `<TypeName>Id`) when no property is named or the named one
+  does not exist. Both apply only when the request produced no order of its own — `SortBy` and
+  `SortCriterias` still win — and both can be configured globally through
+  `PaginationGlobalOptions.DefaultSortProperty` / `EnsureDeterministicOrder`, where a per-request value
+  wins over the configured one. A request that names no order used to translate to `LIMIT`/`OFFSET` with
+  no `ORDER BY`, which lets a relational database return the same row on two pages or on none. Both
+  settings default to off, so the generated SQL of an existing request is unchanged. With `StrictMode`
+  on, a `DefaultSortProperty` the type does not have, or a type whose key cannot be resolved, throws
+  `PaginationStrictModeException` instead of silently staying unordered. The new public helper
+  `QueryableHelper.ApplyDefaultOrdering` applies the same stage on its own.
+
 ### Fixed
 
 - `PaginationOptions.Skip` now computes the offset as a `long` internally before narrowing back to

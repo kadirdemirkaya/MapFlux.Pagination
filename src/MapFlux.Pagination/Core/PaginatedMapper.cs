@@ -27,10 +27,27 @@ public class PaginatedMapper<TSource, TDest> : IPaginatedMapper<TSource, TDest>
         CancellationToken ct = default)
     {
         if (_globalOptions is not null)
+        {
             opts = opts.ClampPageSize(_globalOptions.MaxPageSize);
+            opts = ResolveDefaultOrdering(opts, _globalOptions);
+        }
 
         var pagedSource = await source.ToPagedAsync(opts, ct).ConfigureAwait(false);
         return MapPaged(pagedSource);
+    }
+
+    private static PaginationOptions ResolveDefaultOrdering(PaginationOptions opts, PaginationGlobalOptions globalOptions)
+    {
+        var resolved = opts;
+
+        if (string.IsNullOrWhiteSpace(resolved.DefaultSortProperty)
+            && !string.IsNullOrWhiteSpace(globalOptions.DefaultSortProperty))
+            resolved = resolved with { DefaultSortProperty = globalOptions.DefaultSortProperty };
+
+        if (!resolved.EnsureDeterministicOrder && globalOptions.EnsureDeterministicOrder)
+            resolved = resolved with { EnsureDeterministicOrder = true };
+
+        return resolved;
     }
 
     public IPagedResult<TDest> MapPaged(IPagedResult<TSource> source)
