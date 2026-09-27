@@ -285,6 +285,19 @@ Response:
 }
 ```
 
+### Cursor format
+
+A cursor is an opaque Base64 string — treat it as a token to hand back unchanged, not as a value to
+parse. Its payload is written in a round-trippable, culture-independent form, so a cursor is read back
+as the exact value it was issued for: a `DateTime` / `DateTimeOffset` keeps its sub-second precision,
+and a `decimal` or `double` keeps its full precision and means the same number regardless of the
+culture the server ran under when the cursor was issued.
+
+Cursors issued by earlier versions of the package are still accepted: the decoder recognises the older
+payload and reads it the way it was written, so clients holding an old cursor keep paging without a
+reset. Those older cursors remain as precise as they were — a `DateTime` cursor written in the old
+format still carries only whole seconds.
+
 ---
 
 ## License

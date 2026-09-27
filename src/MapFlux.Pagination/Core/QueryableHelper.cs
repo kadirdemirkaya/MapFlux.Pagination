@@ -10,6 +10,8 @@ namespace MapFlux.Pagination.Core;
 
 public static class QueryableHelper
 {
+    private const string CursorVersionPrefix = "\u0001v1:";
+
     public static IQueryable<T> ApplySorting<T>(IQueryable<T> source, string? sortBy, bool descending)
         => ApplySorting(source, sortBy, descending, strict: false);
 
@@ -327,12 +329,27 @@ public static class QueryableHelper
         return query;
     }
 
+    /// <summary>
+    /// Encodes a cursor value as Base64. The encoded payload carries a version marker and writes the
+    /// value in a round-trippable, culture-independent form, so a cursor produced under one culture
+    /// decodes to the same value under any other.
+    /// </summary>
+    /// <param name="value">The value of the cursor property for the row the cursor points at.</param>
+    /// <returns>The Base64 cursor to hand to the client.</returns>
     public static string EncodeCursor(object value)
     {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(value.ToString()!);
+        var bytes = System.Text.Encoding.UTF8.GetBytes(CursorVersionPrefix + FormatCursorValue(value));
         return Convert.ToBase64String(bytes);
     }
 
+    /// <summary>
+    /// Decodes a Base64 cursor back into a value of <paramref name="targetType"/>. Cursors written by
+    /// the versioned format are read invariantly; cursors issued by earlier versions of this package
+    /// are still accepted and read the way they were written.
+    /// </summary>
+    /// <param name="cursor">The Base64 cursor received from the client.</param>
+    /// <param name="targetType">The type of the cursor property.</param>
+    /// <returns>The decoded value, or <see langword="null"/> when the cursor cannot be read.</returns>
     public static object? DecodeCursor(string cursor, Type targetType)
     {
         try
@@ -340,25 +357,69 @@ public static class QueryableHelper
             var bytes = Convert.FromBase64String(cursor);
             var stringValue = System.Text.Encoding.UTF8.GetString(bytes);
 
-            if (targetType == typeof(int))
-                return int.Parse(stringValue);
-            if (targetType == typeof(long))
-                return long.Parse(stringValue);
-            if (targetType == typeof(Guid))
-                return Guid.Parse(stringValue);
-            if (targetType == typeof(string))
-                return stringValue;
-            if (targetType == typeof(DateTime))
-                return DateTime.Parse(stringValue);
-            if (targetType == typeof(DateTimeOffset))
-                return DateTimeOffset.Parse(stringValue);
+            if (stringValue.StartsWith(CursorVersionPrefix, StringComparison.Ordinal))
+                return ParseVersionedCursor(stringValue.Substring(CursorVersionPrefix.Length), targetType);
 
-            return Convert.ChangeType(stringValue, targetType);
+            return ParseLegacyCursor(stringValue, targetType);
         }
         catch
         {
             return null;
         }
+    }
+
+    private static string FormatCursorValue(object value) => value switch
+    {
+        DateTime dateTime => dateTime.ToString("O", CultureInfo.InvariantCulture),
+        DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
+        DateOnly dateOnly => dateOnly.ToString("O", CultureInfo.InvariantCulture),
+        TimeOnly timeOnly => timeOnly.ToString("O", CultureInfo.InvariantCulture),
+        TimeSpan timeSpan => timeSpan.ToString("c", CultureInfo.InvariantCulture),
+        double doubleValue => doubleValue.ToString("R", CultureInfo.InvariantCulture),
+        float floatValue => floatValue.ToString("R", CultureInfo.InvariantCulture),
+        decimal decimalValue => decimalValue.ToString(CultureInfo.InvariantCulture),
+        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+        _ => value.ToString() ?? string.Empty
+    };
+
+    private static object? ParseVersionedCursor(string text, Type targetType)
+    {
+        if (targetType == typeof(string))
+            return text;
+        if (targetType == typeof(Guid))
+            return Guid.ParseExact(text, "D");
+        if (targetType == typeof(DateTime))
+            return DateTime.ParseExact(text, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        if (targetType == typeof(DateTimeOffset))
+            return DateTimeOffset.ParseExact(text, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        if (targetType == typeof(DateOnly))
+            return DateOnly.ParseExact(text, "O", CultureInfo.InvariantCulture);
+        if (targetType == typeof(TimeOnly))
+            return TimeOnly.ParseExact(text, "O", CultureInfo.InvariantCulture);
+        if (targetType == typeof(TimeSpan))
+            return TimeSpan.ParseExact(text, "c", CultureInfo.InvariantCulture);
+        if (targetType.IsEnum)
+            return Enum.Parse(targetType, text, ignoreCase: true);
+
+        return Convert.ChangeType(text, targetType, CultureInfo.InvariantCulture);
+    }
+
+    private static object? ParseLegacyCursor(string stringValue, Type targetType)
+    {
+        if (targetType == typeof(int))
+            return int.Parse(stringValue);
+        if (targetType == typeof(long))
+            return long.Parse(stringValue);
+        if (targetType == typeof(Guid))
+            return Guid.Parse(stringValue);
+        if (targetType == typeof(string))
+            return stringValue;
+        if (targetType == typeof(DateTime))
+            return DateTime.Parse(stringValue);
+        if (targetType == typeof(DateTimeOffset))
+            return DateTimeOffset.Parse(stringValue);
+
+        return Convert.ChangeType(stringValue, targetType);
     }
 
     private static Expression? BuildFilterExpression(Expression propertyAccess, FilterCriteria filter, Type propertyType, bool strict)

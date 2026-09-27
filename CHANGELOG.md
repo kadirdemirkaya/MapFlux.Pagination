@@ -29,6 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Cursors are now written losslessly and independently of the current culture. `QueryableHelper.EncodeCursor`
+  (signature unchanged) writes a versioned payload inside the same Base64 envelope: `DateTime` and
+  `DateTimeOffset` round-trip through `"O"` and keep their sub-second precision, `double` and `float` through
+  `"R"`, and every other value through `CultureInfo.InvariantCulture`. A `CreatedAt` cursor used to lose
+  everything below the second, so the next page repeated the rows of the previous one; a cursor issued under
+  `tr-TR` and decoded under another culture used to resolve to a different value (a `decimal` `5,5` read back
+  as `55`), which returned the first page again or an empty one. Cursors issued by earlier versions keep
+  decoding exactly as they did — `QueryableHelper.DecodeCursor` reads the versioned payload when it is
+  present and falls back to the previous format otherwise, so clients holding an old cursor keep paging.
 - `PagedResult<T>.TotalPages` no longer overflows to `int.MaxValue` (with `HasNextPage` then `true`)
   when `PageSize` is `0` or negative; it now returns `0`, and `HasNextPage` follows as `false`. The
   constructor still accepts any `PageSize` without throwing.
