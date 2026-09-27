@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently dropped the filter and returned every row. Numbers, strings and booleans are converted,
   `Nullable<T>` properties use their underlying type, and a JSON `null` on a property that accepts
   null matches the rows whose value is not set.
+- `SortCriterias` no longer throws `InvalidOperationException` when the first entry names an unknown
+  property and `StrictMode` is off: the first entry that names a known property now becomes the
+  `OrderBy`, instead of every entry after the dropped one being wired as a `ThenBy` with no preceding
+  `OrderBy`.
 - A filter targeting an `enum` property is no longer silently dropped: the value now converts from an
   enum member name (case-insensitive) or its underlying integer, both matching a value already
   covered by the property's type. A name or integer with no matching enum member still drops the
