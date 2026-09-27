@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -17,31 +18,18 @@ public static class QueryableHelper
         if (string.IsNullOrWhiteSpace(sortBy))
             return source;
 
-        var type = typeof(T);
-        var property = type.GetProperty(sortBy, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+        var property = FindSortableProperty<T>(sortBy);
 
         if (property == null)
         {
             if (strict)
                 throw new PaginationStrictModeException(
-                    $"Unknown sort property '{sortBy}' on type '{type}'.", sortBy, null, null);
+                    $"Unknown sort property '{sortBy}' on type '{typeof(T)}'.", sortBy, null, null);
 
             return source;
         }
 
-        var parameter = Expression.Parameter(type, "p");
-        var propertyAccess = Expression.MakeMemberAccess(parameter, property);
-        var orderByExp = Expression.Lambda(propertyAccess, parameter);
-
-        var methodName = descending ? "OrderByDescending" : "OrderBy";
-        var resultExp = Expression.Call(
-            typeof(Queryable),
-            methodName,
-            new[] { type, property.PropertyType },
-            source.Expression,
-            Expression.Quote(orderByExp));
-
-        return source.Provider.CreateQuery<T>(resultExp);
+        return OrderByProperty(source, property, descending);
     }
 
     public static IQueryable<T> ApplyMultiSorting<T>(IQueryable<T> source, IReadOnlyList<SortCriteria>? sortCriterias)
@@ -206,12 +194,92 @@ public static class QueryableHelper
 
         query = ApplySearch(query, opts.SearchTerm, opts.SearchProperties, opts.StrictMode);
 
+        bool ordered;
+
         if (opts.SortCriterias != null && opts.SortCriterias.Count > 0)
+        {
             query = ApplyMultiSorting(query, opts.SortCriterias, opts.StrictMode);
+            ordered = opts.SortCriterias.Any(criteria => FindSortableProperty<T>(criteria.PropertyName) != null);
+        }
         else
+        {
             query = ApplySorting(query, opts.SortBy, opts.SortDescending, opts.StrictMode);
+            ordered = FindSortableProperty<T>(opts.SortBy) != null;
+        }
+
+        if (!ordered)
+            query = ApplyDefaultOrdering(query, opts);
 
         return query;
+    }
+
+    public static IQueryable<T> ApplyDefaultOrdering<T>(IQueryable<T> source, PaginationOptions opts)
+    {
+        if (!string.IsNullOrWhiteSpace(opts.DefaultSortProperty))
+        {
+            var configured = FindSortableProperty<T>(opts.DefaultSortProperty);
+
+            if (configured != null)
+                return OrderByProperty(source, configured, descending: false);
+
+            if (opts.StrictMode)
+                throw new PaginationStrictModeException(
+                    $"Unknown default sort property '{opts.DefaultSortProperty}' on type '{typeof(T)}'.",
+                    opts.DefaultSortProperty!, null, null);
+        }
+
+        if (!opts.EnsureDeterministicOrder)
+            return source;
+
+        var key = FindKeyProperty<T>();
+
+        if (key != null)
+            return OrderByProperty(source, key, descending: false);
+
+        if (opts.StrictMode)
+            throw new PaginationStrictModeException(
+                $"No key property could be resolved on type '{typeof(T)}' to order by. Set DefaultSortProperty.",
+                string.Empty, null, typeof(T));
+
+        return source;
+    }
+
+    private static PropertyInfo? FindSortableProperty<T>(string? propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(propertyName))
+            return null;
+
+        return typeof(T).GetProperty(propertyName, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+    }
+
+    private static PropertyInfo? FindKeyProperty<T>()
+    {
+        var type = typeof(T);
+
+        var annotated = type
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(property => property.CanRead && property.IsDefined(typeof(KeyAttribute), inherit: true));
+
+        if (annotated != null)
+            return annotated;
+
+        return FindSortableProperty<T>("Id") ?? FindSortableProperty<T>($"{type.Name}Id");
+    }
+
+    private static IQueryable<T> OrderByProperty<T>(IQueryable<T> source, PropertyInfo property, bool descending)
+    {
+        var parameter = Expression.Parameter(typeof(T), "p");
+        var propertyAccess = Expression.MakeMemberAccess(parameter, property);
+        var orderByExp = Expression.Lambda(propertyAccess, parameter);
+
+        var resultExp = Expression.Call(
+            typeof(Queryable),
+            descending ? "OrderByDescending" : "OrderBy",
+            new[] { typeof(T), property.PropertyType },
+            source.Expression,
+            Expression.Quote(orderByExp));
+
+        return source.Provider.CreateQuery<T>(resultExp);
     }
 
     public static IQueryable<T> ApplyCursorFilter<T>(IQueryable<T> source, CursorPaginationOptions opts)

@@ -34,6 +34,10 @@ public record PaginationOptions
 
     public bool StrictMode { get; init; }
 
+    public string? DefaultSortProperty { get; init; }
+
+    public bool EnsureDeterministicOrder { get; init; }
+
     public int Skip
     {
         get
