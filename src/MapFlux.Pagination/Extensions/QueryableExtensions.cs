@@ -1,6 +1,7 @@
 using MapFlux.Pagination.Core;
 using MapFlux.Pagination.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query;
 using MapFlux;
 
 namespace MapFlux.Pagination.Extensions;
@@ -14,8 +15,8 @@ public static class QueryableExtensions
     {
         var query = QueryableHelper.ApplyFullPipeline(source, opts);
 
-        var total = await query.CountAsync(ct);
-        var items = await query.Skip(opts.Skip).Take(opts.Take).ToListAsync(ct);
+        var total = await CountAsyncOrSync(query, ct).ConfigureAwait(false);
+        var items = await ToListAsyncOrSync(query.Skip(opts.Skip).Take(opts.Take), ct).ConfigureAwait(false);
 
         return new PagedResult<T>(items, total, opts.PageNumber, opts.PageSize);
     }
@@ -26,7 +27,7 @@ public static class QueryableExtensions
         PaginationOptions opts,
         CancellationToken ct = default)
     {
-        var paged = await source.ToPagedAsync(opts, ct);
+        var paged = await source.ToPagedAsync(opts, ct).ConfigureAwait(false);
         var mapped = paged.Items.Select(e => mapper.Map<TSource, TDest>(e)).ToList();
 
         return new PagedResult<TDest>(mapped, paged.TotalCount, paged.PageNumber, paged.PageSize);
@@ -37,10 +38,10 @@ public static class QueryableExtensions
         CursorPaginationOptions opts,
         CancellationToken ct = default)
     {
-        var total = await source.CountAsync(ct);
+        var total = await CountAsyncOrSync(source, ct).ConfigureAwait(false);
         var query = QueryableHelper.ApplyCursorFilter(source, opts);
 
-        var items = await query.Take(opts.PageSize + 1).ToListAsync(ct);
+        var items = await ToListAsyncOrSync(query.Take(opts.PageSize + 1), ct).ConfigureAwait(false);
         var hasNextPage = items.Count > opts.PageSize;
 
         if (hasNextPage)
@@ -77,11 +78,21 @@ public static class QueryableExtensions
         CursorPaginationOptions opts,
         CancellationToken ct = default)
     {
-        var paged = await source.ToCursorPagedAsync(opts, ct);
+        var paged = await source.ToCursorPagedAsync(opts, ct).ConfigureAwait(false);
         var mapped = paged.Items.Select(e => mapper.Map<TSource, TDest>(e)).ToList();
 
         return new CursorPagedResult<TDest>(
             mapped, paged.StartCursor, paged.EndCursor,
             paged.HasNextPage, paged.HasPreviousPage, paged.TotalCount);
     }
+
+    private static Task<int> CountAsyncOrSync<T>(IQueryable<T> source, CancellationToken ct)
+        => source.Provider is IAsyncQueryProvider
+            ? source.CountAsync(ct)
+            : Task.FromResult(source.Count());
+
+    private static Task<List<T>> ToListAsyncOrSync<T>(IQueryable<T> source, CancellationToken ct)
+        => source.Provider is IAsyncQueryProvider
+            ? source.ToListAsync(ct)
+            : Task.FromResult(source.ToList());
 }

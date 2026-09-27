@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ToPagedAsync` and `ToCursorPagedAsync` now fall back to a synchronous `Count`/`ToList` when the
+  source `IQueryable`'s provider does not implement `IAsyncQueryProvider` (e.g. a plain
+  `list.AsQueryable()`), instead of throwing `InvalidOperationException`. A source backed by an EF
+  Core async provider is unaffected and still runs the async path.
 - `PaginationOptions.Skip` now computes the offset as a `long` internally before narrowing back to
   `int`; a page number large enough to overflow `int` arithmetic (e.g. `PageNumber = int.MaxValue`
   with `PageSize = 100`) used to wrap into a negative offset and silently return page one instead of
