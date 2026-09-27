@@ -307,6 +307,43 @@ var opts = new CursorPaginationOptions
 
 Both properties are read case-insensitively. Leaving `SortBy` unset orders by `CursorProperty` alone.
 
+### Paging backwards with `Before`
+
+`Before` returns the page that ends just short of the cursor. The query is ordered in the reverse of the
+requested direction, so the rows nearest the cursor are the ones read, and the page is turned back into
+the requested order before it is returned. With 20 rows and `PageSize = 5`, `Before = <cursor of row 16>`
+yields `11, 12, 13, 14, 15` — the page a client lands on when it steps back from the page that starts at
+16. The flags follow the direction the request moved in: `HasPreviousPage` reports whether further rows
+exist behind the page that came back, and `HasNextPage` is `true`, because the cursor was issued for a
+row further on. `After` and `Before` are alternatives; when both are set, `After` wins.
+
+```csharp
+var previous = new CursorPaginationOptions
+{
+    PageSize = 20,
+    CursorProperty = "Id",
+    Before = page.StartCursor
+};
+```
+
+### Cursors a request cannot use
+
+A cursor that cannot be decoded — a truncated or hand-edited token, or one issued for a property of a
+different type — and a `CursorProperty` the entity does not have both leave the query unnarrowed, so the
+first page comes back. `HasPreviousPage` is `false` in that case, so a client is not invited to step back
+to a page that is not there. Set `StrictMode` on `CursorPaginationOptions` to get a
+`PaginationStrictModeException` instead, carrying the property name, the cursor and the target type:
+
+```csharp
+var opts = new CursorPaginationOptions
+{
+    PageSize = 20,
+    CursorProperty = "Id",
+    After = after,
+    StrictMode = true
+};
+```
+
 ### Cursor format
 
 A cursor is an opaque Base64 string — treat it as a token to hand back unchanged, not as a value to

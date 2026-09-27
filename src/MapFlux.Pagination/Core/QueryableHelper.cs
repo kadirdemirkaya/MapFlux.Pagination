@@ -311,30 +311,65 @@ public static class QueryableHelper
         return source.Provider.CreateQuery<T>(resultExp);
     }
 
+    /// <summary>
+    /// Orders <paramref name="source"/> for cursor paging and narrows it to the rows beyond the cursor.
+    /// A <see cref="CursorPaginationOptions.Before"/> request is a backward keyset scan: the ordering is
+    /// the reverse of the requested one so the rows nearest the cursor are read first, which means the
+    /// query yields the page in reverse and the caller has to reverse the materialized rows.
+    /// </summary>
+    /// <param name="source">The query to page.</param>
+    /// <param name="opts">The cursor pagination options the page is read with.</param>
+    /// <returns>The ordered and filtered query.</returns>
     public static IQueryable<T> ApplyCursorFilter<T>(IQueryable<T> source, CursorPaginationOptions opts)
+        => BuildCursorQuery(source, opts).Query;
+
+    internal static (IQueryable<T> Query, bool Reversed, bool CursorApplied) BuildCursorQuery<T>(
+        IQueryable<T> source,
+        CursorPaginationOptions opts)
     {
         var cursorProperty = FindSortableProperty<T>(opts.CursorProperty);
 
         if (cursorProperty == null)
-            return source;
+        {
+            if (opts.StrictMode)
+                throw new PaginationStrictModeException(
+                    $"Cursor property '{opts.CursorProperty}' does not exist on type '{typeof(T).Name}'.",
+                    opts.CursorProperty,
+                    null,
+                    typeof(T));
+
+            return (source, false, false);
+        }
 
         var sortProperty = FindSortableProperty<T>(opts.SortBy);
-        var query = ApplyCursorOrdering(source, sortProperty, cursorProperty, opts);
+        var backward = string.IsNullOrWhiteSpace(opts.After) && !string.IsNullOrWhiteSpace(opts.Before);
+        var cursor = backward ? opts.Before : opts.After;
 
-        if (!string.IsNullOrWhiteSpace(opts.After))
+        Expression<Func<T, bool>>? predicate = null;
+
+        if (!string.IsNullOrWhiteSpace(cursor))
         {
-            var lambda = BuildCursorPredicate<T>(sortProperty, cursorProperty, opts.After!, greaterThan: !opts.SortDescending);
-            if (lambda != null)
-                query = query.Where(lambda);
-        }
-        else if (!string.IsNullOrWhiteSpace(opts.Before))
-        {
-            var lambda = BuildCursorPredicate<T>(sortProperty, cursorProperty, opts.Before!, greaterThan: opts.SortDescending);
-            if (lambda != null)
-                query = query.Where(lambda);
+            predicate = BuildCursorPredicate<T>(
+                sortProperty,
+                cursorProperty,
+                cursor!,
+                greaterThan: backward ? opts.SortDescending : !opts.SortDescending);
+
+            if (predicate == null && opts.StrictMode)
+                throw new PaginationStrictModeException(
+                    $"Cursor '{cursor}' cannot be decoded into a value of type '{cursorProperty.PropertyType.Name}' for property '{cursorProperty.Name}'.",
+                    cursorProperty.Name,
+                    cursor,
+                    cursorProperty.PropertyType);
         }
 
-        return query;
+        var reversed = backward && predicate != null;
+        var query = ApplyCursorOrdering(source, sortProperty, cursorProperty, opts, reversed);
+
+        if (predicate != null)
+            query = query.Where(predicate);
+
+        return (query, reversed, predicate != null);
     }
 
     /// <summary>
@@ -373,20 +408,23 @@ public static class QueryableHelper
         IQueryable<T> source,
         PropertyInfo? sortProperty,
         PropertyInfo cursorProperty,
-        CursorPaginationOptions opts)
+        CursorPaginationOptions opts,
+        bool reversed)
     {
+        var descending = reversed ? !opts.SortDescending : opts.SortDescending;
+
         if (sortProperty == null)
             return string.IsNullOrWhiteSpace(opts.SortBy)
-                ? OrderByProperty(source, cursorProperty, opts.SortDescending)
+                ? OrderByProperty(source, cursorProperty, descending)
                 : source;
 
         if (IsSameProperty(sortProperty, cursorProperty))
-            return OrderByProperty(source, cursorProperty, opts.SortDescending);
+            return OrderByProperty(source, cursorProperty, descending);
 
         return ThenByProperty(
-            OrderByProperty(source, sortProperty, opts.SortDescending),
+            OrderByProperty(source, sortProperty, descending),
             cursorProperty,
-            opts.SortDescending);
+            descending);
     }
 
     private static bool IsSameProperty(PropertyInfo left, PropertyInfo right)

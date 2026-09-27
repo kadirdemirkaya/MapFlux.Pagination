@@ -9,6 +9,8 @@ public record CursorPaginationOptions
     public string? SortBy { get; init; }
     public bool SortDescending { get; init; }
 
+    public bool StrictMode { get; init; }
+
     public CursorPaginationOptions ClampPageSize(int maxPageSize)
     {
         if (PageSize <= maxPageSize)

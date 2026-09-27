@@ -29,6 +29,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `CursorPaginationOptions.Before` now returns the page that precedes the cursor. The query is ordered in
+  the reverse of the requested direction, reads `PageSize + 1` rows and the page is turned back into the
+  requested order, so with 20 rows and `PageSize = 5` a `Before` pointing at row 16 comes back as
+  `11, 12, 13, 14, 15`; it used to come back as `1, 2, 3, 4, 5`, because the cursor only narrowed the query
+  and the rows were then read from the start. The flags follow the direction the request moved in:
+  `HasPreviousPage` reports whether rows remain behind the page that came back, and `HasNextPage` is `true`
+  on a `Before` request. A `Before` request with a separate sort key walks the composite keyset backwards
+  the same way. An `After` request is unchanged, the last page included.
+- A cursor that cannot be decoded, and a `CursorProperty` the entity does not have, no longer report
+  `HasPreviousPage = true` on the first page they fall back to. Both still leave the query unnarrowed by
+  default, so the first page is returned as before, but a client is no longer told it can step back from
+  it. The new `CursorPaginationOptions.StrictMode` (default `false`) turns both cases into a
+  `PaginationStrictModeException` carrying the property name, the cursor and the target type.
 - Cursor pagination now honours `SortDescending` and a `SortBy` that differs from `CursorProperty`.
   The cursor filter follows the sort direction, so a descending request continues below the cursor
   instead of above it: the second page of 20 rows with `PageSize = 5` used to come back as `20, 19, 18,
