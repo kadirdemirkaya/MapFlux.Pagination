@@ -1,22 +1,6 @@
 # MapFlux.Pagination
 
-Advanced Pagination + Object Mapping library for .NET 6.0, 7.0, 8.0, and 9.0, powered by MapFlux and Entity Framework Core.
-
-MapFlux.Pagination allows you to query, filter, sort, and paginate database entities, and automatically map them directly to DTOs in a single database roundtrip.
-
----
-
-## Features
-
-- ⚡ **Automatic Mapping**: Maps database entities directly to DTOs using MapFlux.
-- 🔍 **Dynamic Filtering**: Property-based filtering with operators like Equals, Contains, GreaterThan, etc.
-- 🔀 **Multi-Column Sorting**: Order by multiple fields dynamically.
-- 🔎 **Global Search**: Case-insensitive search across multiple string properties.
-- ⏳ **Cursor-Based Pagination**: High-performance keyset pagination for large datasets.
-- 💾 **In-Memory Pagination**: Paginate standard in-memory lists/collections.
-- 🛡️ **Input Validation & Safety**: Guardrails against invalid page arguments.
-
----
+Filter, sort, search and paginate an `IQueryable`, with the page mapped straight to DTOs through MapFlux.
 
 ## Installation
 
@@ -24,67 +8,24 @@ MapFlux.Pagination allows you to query, filter, sort, and paginate database enti
 dotnet add package MapFlux.Pagination
 ```
 
----
-
 ## Quick Start
-
-### 1. Define a Mapping Profile
-
-Create a MapFlux mapping profile to define how your entity maps to a DTO:
 
 ```csharp
 using MapFlux;
+using MapFlux.Pagination.Core;
+using MapFlux.Pagination.Extensions;
+using MapFlux.Pagination.Models;
 
-public class UserProfile : IMapProfile
+public class UserProfile : Profile
 {
-    public void Configure(IProfileExpression expression)
+    public override void Configure(IMapperConfigurationExpression cfg)
     {
-        expression.CreateMap<User, UserDto>()
-            .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.Name));
+        cfg.CreateMap<User, UserDto>(opt => opt.ForMember(d => d.FullName, m => m.MapFrom(s => s.Name)));
     }
 }
-```
 
-### 2. Register in `Program.cs`
+builder.Services.AddMapFluxPagination(cfg => cfg.AddProfile<UserProfile>());
 
-```csharp
-using MapFlux.Pagination.Extensions;
-
-builder.Services.AddMapFluxPagination(cfg => 
-{
-    cfg.AddProfile<UserProfile>();
-});
-```
-
-Optionally configure global limits. `MaxPageSize` is enforced by `IPaginatedMapper<,>`: a
-`PaginationOptions.PageSize` above the configured limit is clamped down to it before the query runs.
-
-```csharp
-builder.Services.AddMapFluxPagination(
-    cfg => cfg.AddProfile<UserProfile>(),
-    opts => 
-    {
-        opts.DefaultPageSize = 20;
-        opts.MaxPageSize = 100;
-    });
-```
-
-Opt in to configuration validation with `ValidateOnStart`. When set, an incomplete map throws
-`InvalidOperationException` as soon as `IMapper` is resolved from the container instead of on the
-first `MapPagedAsync` call. Resolve it once right after building the app to fail fast at startup:
-
-```csharp
-builder.Services.AddMapFluxPagination(
-    cfg => cfg.AddProfile<UserProfile>(),
-    opts => opts.ValidateOnStart = true);
-
-var app = builder.Build();
-app.Services.GetRequiredService<IMapper>();
-```
-
-### 3. Use in Controller
-
-```csharp
 [ApiController]
 [Route("api/users")]
 public class UsersController : ControllerBase
@@ -113,7 +54,7 @@ Response:
 ```json
 {
   "items": [
-    { "fullName": "John Doe", "email": "john@example.com" }
+    { "fullName": "John Doe" }
   ],
   "totalCount": 150,
   "pageNumber": 1,
@@ -124,6 +65,53 @@ Response:
   "firstItemIndex": 1,
   "lastItemIndex": 10
 }
+```
+
+`MapPagedAsync` runs two queries against `_db.Users` — a `COUNT(*)` for `totalCount` and the page
+itself — then maps the page in memory; it is not a single roundtrip. Skip the count on cursor paging
+with `IncludeTotalCount = false` (see below) when you don't need it.
+
+---
+
+## Features
+
+- ⚡ **Automatic Mapping**: Maps database entities directly to DTOs using MapFlux.
+- 🔍 **Dynamic Filtering**: Property-based filtering with operators like Equals, Contains, GreaterThan, etc.
+- 🔀 **Multi-Column Sorting**: Order by multiple fields dynamically.
+- 🔎 **Global Search**: Case-insensitive search across multiple string properties.
+- ⏳ **Cursor-Based Pagination**: High-performance keyset pagination for large datasets.
+- 💾 **In-Memory Pagination**: Paginate standard in-memory lists/collections, with an opt-in filter/search/sort pipeline.
+- 🛡️ **Input Validation & Safety**: Guardrails against invalid page arguments.
+
+---
+
+## Global Options
+
+Configure default and maximum page sizes once for every `IPaginatedMapper<,>` call. `MaxPageSize` is
+enforced by `IPaginatedMapper<,>`: a `PaginationOptions.PageSize` above the configured limit is clamped
+down to it before the query runs.
+
+```csharp
+builder.Services.AddMapFluxPagination(
+    cfg => cfg.AddProfile<UserProfile>(),
+    opts =>
+    {
+        opts.DefaultPageSize = 20;
+        opts.MaxPageSize = 100;
+    });
+```
+
+Opt in to configuration validation with `ValidateOnStart`. When set, an incomplete map throws
+`InvalidOperationException` as soon as `IMapper` is resolved from the container instead of on the
+first `MapPagedAsync` call. Resolve it once right after building the app to fail fast at startup:
+
+```csharp
+builder.Services.AddMapFluxPagination(
+    cfg => cfg.AddProfile<UserProfile>(),
+    opts => opts.ValidateOnStart = true);
+
+var app = builder.Build();
+app.Services.GetRequiredService<IMapper>();
 ```
 
 ---
@@ -200,6 +188,11 @@ same request behaves the same on every server: `"2026-01-01T10:00:01Z"` keeps it
 `DateTime` or `DateTimeOffset` property instead of shifting to the server's local time, `"5.5"`
 reaches a `decimal` where the culture uses a decimal comma — and `"5,5"` still reaches it there too —
 and `Guid`, `DateOnly` and `TimeOnly` properties accept their usual text form.
+
+`Contains`, `StartsWith` and `EndsWith` translate to the provider's own string comparison, so their
+case-sensitivity follows the column's collation — case-sensitive on SQLite's default collation, for
+example, even though `SearchTerm` matching is always lowercased and therefore case-insensitive
+everywhere.
 
 By default, an unknown property name, a value that cannot be converted, or an operator that does not
 apply to the target type is silently ignored — the filter, search term or sort is dropped and the rest
@@ -420,4 +413,4 @@ Two things follow from letting the database do the comparison:
 
 ## License
 
-This project is licensed under the MIT License
+This project is licensed under the [MIT License](https://github.com/kadirdemirkaya/PaginationFlux/blob/main/LICENSE).
