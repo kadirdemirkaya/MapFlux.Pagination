@@ -133,6 +133,14 @@ List<User> users = GetCachedUsers();
 IPagedResult<User> result = users.ToPaged(opts);
 ```
 
+By default, `ToPaged` only slices the collection by page — filters, search and sorting on `opts` are
+ignored. Pass `applyPipeline: true` to run the same filter/search/sort pipeline used by the
+`IQueryable` extensions, in memory:
+
+```csharp
+IPagedResult<User> result = users.ToPaged(opts, applyPipeline: true);
+```
+
 ---
 
 ## Dynamic Filtering & Multi-Sorting
