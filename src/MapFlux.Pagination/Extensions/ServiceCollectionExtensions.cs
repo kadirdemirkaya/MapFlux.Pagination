@@ -42,6 +42,10 @@ public static class ServiceCollectionExtensions
             var m = new Mapper();
             foreach (var configureAction in accumulator.ConfigureActions)
                 configureAction.Invoke(new MapperConfigurationBuilder(m));
+
+            if (sp.GetService<PaginationGlobalOptions>()?.ValidateOnStart == true)
+                m.AssertConfigurationIsValid();
+
             return m;
         });
 

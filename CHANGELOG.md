@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Opt-in `PaginationGlobalOptions.ValidateOnStart` (default `false`, today's behaviour unchanged) calls
+  `AssertConfigurationIsValid()` on the configured `IMapper` as soon as it is resolved from the
+  container, so an incomplete map fails at startup instead of on the first `MapPagedAsync` call.
 - Opt-in deterministic page order for offset pagination: `PaginationOptions.DefaultSortProperty` orders
   ascending by the named property, and `PaginationOptions.EnsureDeterministicOrder` falls back to the
   entity's key (`[Key]`, otherwise `Id` or `<TypeName>Id`) when no property is named or the named one
