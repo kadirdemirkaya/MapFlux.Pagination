@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Text.Json;
 using MapFlux.Pagination.Models;
 
 namespace MapFlux.Pagination.Core;
@@ -243,6 +244,14 @@ public static class QueryableHelper
 
     private static Expression? BuildFilterExpression(Expression propertyAccess, FilterOperator op, object? value, Type propertyType)
     {
+        if (value is JsonElement nullCandidate && IsJsonNull(nullCandidate))
+        {
+            if (!AcceptsNull(propertyType))
+                return null;
+
+            value = null;
+        }
+
         if (value == null && op != FilterOperator.Equals && op != FilterOperator.NotEquals)
             return null;
 
@@ -311,6 +320,9 @@ public static class QueryableHelper
         {
             var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
+            if (value is JsonElement jsonElement)
+                return ConvertJsonElement(jsonElement, underlyingType);
+
             if (value.GetType() == underlyingType)
                 return value;
 
@@ -321,4 +333,63 @@ public static class QueryableHelper
             return null;
         }
     }
+
+    private static object? ConvertJsonElement(JsonElement element, Type underlyingType)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                var text = element.GetString();
+                if (text == null)
+                    return null;
+                return underlyingType == typeof(string) ? text : ConvertValue(text, underlyingType);
+
+            case JsonValueKind.Number:
+                return ConvertJsonNumber(element, underlyingType);
+
+            case JsonValueKind.True:
+            case JsonValueKind.False:
+                var flag = element.GetBoolean();
+                return underlyingType == typeof(bool) ? flag : ConvertValue(flag, underlyingType);
+
+            default:
+                return null;
+        }
+    }
+
+    private static object? ConvertJsonNumber(JsonElement element, Type underlyingType)
+    {
+        if (underlyingType == typeof(int))
+            return element.GetInt32();
+        if (underlyingType == typeof(long))
+            return element.GetInt64();
+        if (underlyingType == typeof(short))
+            return element.GetInt16();
+        if (underlyingType == typeof(byte))
+            return element.GetByte();
+        if (underlyingType == typeof(sbyte))
+            return element.GetSByte();
+        if (underlyingType == typeof(uint))
+            return element.GetUInt32();
+        if (underlyingType == typeof(ulong))
+            return element.GetUInt64();
+        if (underlyingType == typeof(ushort))
+            return element.GetUInt16();
+        if (underlyingType == typeof(decimal))
+            return element.GetDecimal();
+        if (underlyingType == typeof(double))
+            return element.GetDouble();
+        if (underlyingType == typeof(float))
+            return element.GetSingle();
+        if (underlyingType == typeof(string))
+            return element.GetRawText();
+
+        return ConvertValue(element.GetDecimal(), underlyingType);
+    }
+
+    private static bool IsJsonNull(JsonElement element)
+        => element.ValueKind == JsonValueKind.Null || element.ValueKind == JsonValueKind.Undefined;
+
+    private static bool AcceptsNull(Type type)
+        => !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
 }
