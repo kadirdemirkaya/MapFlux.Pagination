@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently dropped the filter and returned every row. Numbers, strings and booleans are converted,
   `Nullable<T>` properties use their underlying type, and a JSON `null` on a property that accepts
   null matches the rows whose value is not set.
+- A filter targeting an `enum` property is no longer silently dropped: the value now converts from an
+  enum member name (case-insensitive) or its underlying integer, both matching a value already
+  covered by the property's type. A name or integer with no matching enum member still drops the
+  filter, same as any other unrecognized filter value.
+- A text filter value is no longer interpreted with the server's culture and time zone. Strings are
+  now parsed with the invariant culture first, so a `DateTime` or `DateTimeOffset` value such as
+  `"2026-01-01T10:00:01Z"` keeps its UTC instant instead of shifting to local time, and `"5.5"`
+  reaches a `decimal`, `double` or `float` property under a culture that uses a decimal comma. When
+  the invariant attempt fails the current culture is tried, so values that worked before — `"5,5"` on
+  a server with a decimal comma — keep working. `Guid`, `DateOnly` and `TimeOnly` properties are
+  parsed explicitly instead of dropping the filter and returning every row.
 
 ### Security
 
