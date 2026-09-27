@@ -52,19 +52,8 @@ public static class QueryableExtensions
 
         if (items.Count > 0)
         {
-            var cursorProperty = typeof(T).GetProperty(opts.CursorProperty,
-                System.Reflection.BindingFlags.IgnoreCase | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-            if (cursorProperty != null)
-            {
-                var firstValue = cursorProperty.GetValue(items[0]);
-                var lastValue = cursorProperty.GetValue(items[^1]);
-
-                if (firstValue != null)
-                    startCursor = QueryableHelper.EncodeCursor(firstValue);
-                if (lastValue != null)
-                    endCursor = QueryableHelper.EncodeCursor(lastValue);
-            }
+            startCursor = QueryableHelper.BuildCursor(items[0], opts);
+            endCursor = QueryableHelper.BuildCursor(items[^1], opts);
         }
 
         var hasPreviousPage = !string.IsNullOrWhiteSpace(opts.After);
