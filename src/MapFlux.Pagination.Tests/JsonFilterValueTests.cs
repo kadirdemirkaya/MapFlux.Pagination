@@ -13,6 +13,12 @@ namespace MapFlux.Pagination.Tests;
 
 public class JsonFilterValueTests
 {
+    private enum Status
+    {
+        Active = 0,
+        Inactive = 1
+    }
+
     private class TestEntity
     {
         public int Id { get; set; }
@@ -27,6 +33,7 @@ public class JsonFilterValueTests
         public decimal Price { get; set; }
         public double Score { get; set; }
         public float Ratio { get; set; }
+        public Status Status { get; set; }
     }
 
     private class TestDbContext : DbContext
@@ -50,7 +57,8 @@ public class JsonFilterValueTests
         Rank = (byte)i,
         Price = i + 0.5m,
         Score = i + 0.25d,
-        Ratio = i + 0.5f
+        Ratio = i + 0.5f,
+        Status = i % 2 == 0 ? Status.Active : Status.Inactive
     };
 
     private static readonly List<TestEntity> Entities = Enumerable.Range(1, 20).Select(Create).ToList();
@@ -272,5 +280,41 @@ public class JsonFilterValueTests
             Assert.True(item.Age > 15);
             Assert.True(item.IsActive);
         });
+    }
+
+    [Theory]
+    [InlineData("\"Active\"")]
+    [InlineData("\"active\"")]
+    public void ApplyFiltering_JsonStringValue_OnEnumMember_ShouldConvertCaseInsensitive(string jsonValue)
+    {
+        var result = Filter(FromJson("Status", FilterOperator.Equals, jsonValue));
+
+        Assert.Equal(10, result.Count);
+        Assert.All(result, item => Assert.Equal(Status.Active, item.Status));
+    }
+
+    [Fact]
+    public void ApplyFiltering_JsonNumberValue_OnEnumMember_ShouldConvert()
+    {
+        var result = Filter(FromJson("Status", FilterOperator.Equals, "0"));
+
+        Assert.Equal(10, result.Count);
+        Assert.All(result, item => Assert.Equal(Status.Active, item.Status));
+    }
+
+    [Fact]
+    public void ApplyFiltering_JsonStringValue_OnEnumMember_UndefinedName_ShouldNotFilter()
+    {
+        var result = Filter(FromJson("Status", FilterOperator.Equals, "\"Bogus\""));
+
+        Assert.Equal(20, result.Count);
+    }
+
+    [Fact]
+    public void ApplyFiltering_JsonNumberValue_OnEnumMember_UndefinedValue_ShouldNotFilter()
+    {
+        var result = Filter(FromJson("Status", FilterOperator.Equals, "99"));
+
+        Assert.Equal(20, result.Count);
     }
 }

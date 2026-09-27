@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
@@ -326,12 +327,89 @@ public static class QueryableHelper
             if (value.GetType() == underlyingType)
                 return value;
 
+            if (underlyingType.IsEnum)
+                return ConvertToEnum(value, underlyingType);
+
+            if (value is string text)
+                return ConvertFromString(text, underlyingType);
+
             return Convert.ChangeType(value, underlyingType);
         }
         catch
         {
             return null;
         }
+    }
+
+    private static object? ConvertFromString(string text, Type targetType)
+    {
+        if (targetType == typeof(Guid))
+            return Guid.TryParse(text, out var guid) ? guid : (object?)null;
+
+        if (targetType == typeof(DateTime))
+            return ParseDateTime(text, CultureInfo.InvariantCulture) ?? ParseDateTime(text, CultureInfo.CurrentCulture);
+
+        if (targetType == typeof(DateTimeOffset))
+            return ParseDateTimeOffset(text, CultureInfo.InvariantCulture) ?? ParseDateTimeOffset(text, CultureInfo.CurrentCulture);
+
+        if (targetType == typeof(DateOnly))
+            return ParseDateOnly(text, CultureInfo.InvariantCulture) ?? ParseDateOnly(text, CultureInfo.CurrentCulture);
+
+        if (targetType == typeof(TimeOnly))
+            return ParseTimeOnly(text, CultureInfo.InvariantCulture) ?? ParseTimeOnly(text, CultureInfo.CurrentCulture);
+
+        if (IsFloatingPoint(targetType))
+            return ParseFloatingPoint(text, targetType, NumberStyles.Float, CultureInfo.InvariantCulture)
+                ?? ParseFloatingPoint(text, targetType, NumberStyles.Number, CultureInfo.CurrentCulture);
+
+        return ChangeType(text, targetType, CultureInfo.InvariantCulture) ?? ChangeType(text, targetType, CultureInfo.CurrentCulture);
+    }
+
+    private static object? ParseDateTime(string text, CultureInfo culture)
+        => DateTime.TryParse(text, culture, DateTimeStyles.RoundtripKind, out var value) ? value : (object?)null;
+
+    private static object? ParseDateTimeOffset(string text, CultureInfo culture)
+        => DateTimeOffset.TryParse(text, culture, DateTimeStyles.RoundtripKind, out var value) ? value : (object?)null;
+
+    private static object? ParseDateOnly(string text, CultureInfo culture)
+        => DateOnly.TryParse(text, culture, DateTimeStyles.None, out var value) ? value : (object?)null;
+
+    private static object? ParseTimeOnly(string text, CultureInfo culture)
+        => TimeOnly.TryParse(text, culture, DateTimeStyles.None, out var value) ? value : (object?)null;
+
+    private static bool IsFloatingPoint(Type type)
+        => type == typeof(decimal) || type == typeof(double) || type == typeof(float);
+
+    private static object? ParseFloatingPoint(string text, Type targetType, NumberStyles styles, CultureInfo culture)
+    {
+        if (targetType == typeof(decimal))
+            return decimal.TryParse(text, styles, culture, out var decimalValue) ? decimalValue : (object?)null;
+
+        if (targetType == typeof(double))
+            return double.TryParse(text, styles, culture, out var doubleValue) ? doubleValue : (object?)null;
+
+        return float.TryParse(text, styles, culture, out var floatValue) ? floatValue : (object?)null;
+    }
+
+    private static object? ChangeType(string text, Type targetType, CultureInfo culture)
+    {
+        try
+        {
+            return Convert.ChangeType(text, targetType, culture);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static object? ConvertToEnum(object value, Type enumType)
+    {
+        if (value is string text)
+            return Enum.TryParse(enumType, text, ignoreCase: true, out var parsed) ? parsed : null;
+
+        var numeric = Convert.ToInt64(value);
+        return Enum.IsDefined(enumType, Enum.ToObject(enumType, numeric)) ? Enum.ToObject(enumType, numeric) : null;
     }
 
     private static object? ConvertJsonElement(JsonElement element, Type underlyingType)
