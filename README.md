@@ -285,6 +285,27 @@ Response:
 }
 ```
 
+### Skipping the total count
+
+Every cursor page runs a `COUNT(*)` alongside the page query by default (`IncludeTotalCount = true`),
+matching `totalCount` above. On a large table that count is often the more expensive of the two
+queries and cursor paging does not need it to know whether there is a next page. Set
+`IncludeTotalCount = false` to skip it — only the page query runs, and `TotalCount` on the result is
+`-1`:
+
+```csharp
+var opts = new CursorPaginationOptions
+{
+    PageSize = size,
+    After = after,
+    CursorProperty = "Id",
+    IncludeTotalCount = false
+};
+
+ICursorPagedResult<UserDto> result = await _mapper.MapCursorPagedAsync(_db.Users, opts);
+// result.TotalCount == -1, result.HasNextPage / HasPreviousPage are unaffected
+```
+
 ### Sort direction and a separate sort key
 
 `SortDescending` controls both the page order and the direction the cursor moves in: with
