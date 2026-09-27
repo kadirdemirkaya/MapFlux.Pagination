@@ -298,6 +298,26 @@ payload and reads it the way it was written, so clients holding an old cursor ke
 reset. Those older cursors remain as precise as they were — a `DateTime` cursor written in the old
 format still carries only whole seconds.
 
+### Cursor property types
+
+`CursorProperty` can name any property whose values can be ordered: the integral and floating-point
+numeric types, `decimal`, `char`, `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan`,
+`string`, `Guid` and an `enum`. For `string` the page is narrowed with `string.Compare`, for `Guid` with
+`Guid.CompareTo`, and an `enum` is compared as its underlying numeric type — all three translate to a
+plain column comparison in SQL, so paging stays server-side.
+
+Two things follow from letting the database do the comparison:
+
+- **`string`**: the page boundary follows the column's collation, exactly as the `ORDER BY` of the same
+  query does. A case- or accent-insensitive collation therefore orders — and pages — the rows the way
+  that collation dictates, which need not match .NET's own string ordering.
+- **`Guid`**: databases do not agree on how to order a `Guid`. SQL Server compares the last six bytes
+  first, PostgreSQL (`uuid`) and providers that store the value as text compare it byte by byte or
+  character by character, and .NET's own `Guid` ordering is a third one. The pages themselves stay
+  correct and non-overlapping, because the filter and the `ORDER BY` run under the same rules; only the
+  sequence the rows come back in differs per database. Where a stable, portable order matters, page on a
+  sequential key and keep the `Guid` as the payload.
+
 ---
 
 ## License

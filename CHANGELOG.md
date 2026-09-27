@@ -29,6 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A `CursorProperty` whose type has no comparison operator is now compared with `CompareTo`, so `string`,
+  `Guid` and `enum` cursor properties page instead of throwing. `CursorProperty = "Name"` used to fail with
+  `InvalidOperationException: The binary operator GreaterThan is not defined for the types 'System.String'
+  and 'System.String'`, and the same happened for an `enum` property and for a `Guid` on a .NET 6 runtime,
+  where `Guid` has no comparison operator. `string` is narrowed with `string.Compare`, `Guid` with
+  `Guid.CompareTo` on every runtime, and an `enum` is compared as its underlying numeric type; all three
+  translate to a plain column comparison in SQL, so the page is still produced by the database. Cursor
+  properties of a numeric, `decimal`, `char`, `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly` or
+  `TimeSpan` type keep the comparison they had.
 - Cursors are now written losslessly and independently of the current culture. `QueryableHelper.EncodeCursor`
   (signature unchanged) writes a versioned payload inside the same Base64 envelope: `DateTime` and
   `DateTimeOffset` round-trip through `"O"` and keep their sub-second precision, `double` and `float` through

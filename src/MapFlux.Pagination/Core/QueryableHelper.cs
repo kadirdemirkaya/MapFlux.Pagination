@@ -12,6 +12,13 @@ public static class QueryableHelper
 {
     private const string CursorVersionPrefix = "\u0001v1:";
 
+    private static readonly HashSet<Type> OperatorComparableTypes = new()
+    {
+        typeof(byte), typeof(sbyte), typeof(short), typeof(ushort), typeof(int), typeof(uint),
+        typeof(long), typeof(ulong), typeof(char), typeof(float), typeof(double), typeof(decimal),
+        typeof(DateTime), typeof(DateTimeOffset), typeof(TimeSpan), typeof(DateOnly), typeof(TimeOnly)
+    };
+
     public static IQueryable<T> ApplySorting<T>(IQueryable<T> source, string? sortBy, bool descending)
         => ApplySorting(source, sortBy, descending, strict: false);
 
@@ -301,33 +308,63 @@ public static class QueryableHelper
 
         if (!string.IsNullOrWhiteSpace(opts.After))
         {
-            var cursorValue = DecodeCursor(opts.After, cursorProperty.PropertyType);
-            if (cursorValue != null)
-            {
-                var parameter = Expression.Parameter(type, "p");
-                var propertyAccess = Expression.MakeMemberAccess(parameter, cursorProperty);
-                var constant = Expression.Constant(cursorValue, cursorProperty.PropertyType);
-                var comparison = Expression.GreaterThan(propertyAccess, constant);
-                var lambda = Expression.Lambda<Func<T, bool>>(comparison, parameter);
+            var lambda = BuildCursorPredicate<T>(cursorProperty, opts.After!, greaterThan: true);
+            if (lambda != null)
                 query = query.Where(lambda);
-            }
         }
         else if (!string.IsNullOrWhiteSpace(opts.Before))
         {
-            var cursorValue = DecodeCursor(opts.Before, cursorProperty.PropertyType);
-            if (cursorValue != null)
-            {
-                var parameter = Expression.Parameter(type, "p");
-                var propertyAccess = Expression.MakeMemberAccess(parameter, cursorProperty);
-                var constant = Expression.Constant(cursorValue, cursorProperty.PropertyType);
-                var comparison = Expression.LessThan(propertyAccess, constant);
-                var lambda = Expression.Lambda<Func<T, bool>>(comparison, parameter);
+            var lambda = BuildCursorPredicate<T>(cursorProperty, opts.Before!, greaterThan: false);
+            if (lambda != null)
                 query = query.Where(lambda);
-            }
         }
 
         return query;
     }
+
+    private static Expression<Func<T, bool>>? BuildCursorPredicate<T>(PropertyInfo cursorProperty, string cursor, bool greaterThan)
+    {
+        var cursorValue = DecodeCursor(cursor, cursorProperty.PropertyType);
+        if (cursorValue == null)
+            return null;
+
+        var parameter = Expression.Parameter(typeof(T), "p");
+        var propertyAccess = Expression.MakeMemberAccess(parameter, cursorProperty);
+        var constant = Expression.Constant(cursorValue, cursorProperty.PropertyType);
+        var comparison = BuildCursorComparison(propertyAccess, constant, cursorProperty.PropertyType, greaterThan);
+
+        return Expression.Lambda<Func<T, bool>>(comparison, parameter);
+    }
+
+    private static Expression BuildCursorComparison(Expression propertyAccess, Expression constant, Type propertyType, bool greaterThan)
+    {
+        if (propertyType.IsEnum)
+        {
+            var underlyingType = Enum.GetUnderlyingType(propertyType);
+            return CompareWithOperator(
+                Expression.Convert(propertyAccess, underlyingType),
+                Expression.Convert(constant, underlyingType),
+                greaterThan);
+        }
+
+        if (propertyType == typeof(string))
+        {
+            var compare = typeof(string).GetMethod(nameof(string.Compare), new[] { typeof(string), typeof(string) })!;
+            return CompareWithOperator(Expression.Call(compare, propertyAccess, constant), Expression.Constant(0), greaterThan);
+        }
+
+        if (!OperatorComparableTypes.Contains(propertyType))
+        {
+            var compareTo = propertyType.GetMethod(nameof(IComparable.CompareTo), new[] { propertyType });
+            if (compareTo != null && compareTo.ReturnType == typeof(int))
+                return CompareWithOperator(Expression.Call(propertyAccess, compareTo, constant), Expression.Constant(0), greaterThan);
+        }
+
+        return CompareWithOperator(propertyAccess, constant, greaterThan);
+    }
+
+    private static Expression CompareWithOperator(Expression left, Expression right, bool greaterThan)
+        => greaterThan ? Expression.GreaterThan(left, right) : Expression.LessThan(left, right);
 
     /// <summary>
     /// Encodes a cursor value as Base64. The encoded payload carries a version marker and writes the
