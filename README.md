@@ -179,6 +179,29 @@ same request behaves the same on every server: `"2026-01-01T10:00:01Z"` keeps it
 reaches a `decimal` where the culture uses a decimal comma — and `"5,5"` still reaches it there too —
 and `Guid`, `DateOnly` and `TimeOnly` properties accept their usual text form.
 
+By default, an unknown property name, a value that cannot be converted, or an operator that does not
+apply to the target type is silently ignored — the filter, search term or sort is dropped and the rest
+of the request still runs. Set `StrictMode` to opt into an explanatory `PaginationStrictModeException`
+instead, so a typo in a property name or a bad value fails fast rather than quietly returning
+unfiltered rows:
+
+```csharp
+var opts = new PaginationOptions
+{
+    StrictMode = true,
+    Filters = new List<FilterCriteria>
+    {
+        new() { PropertyName = "Age", Operator = FilterOperator.Equals, Value = "abc" }
+    }
+};
+
+// throws PaginationStrictModeException: property name, value and target type are all on the exception
+var result = await _mapper.MapPagedAsync(_db.Users, opts);
+```
+
+`StrictMode` covers `Filters`, `SearchProperties` and sorting (`SortBy` / `SortCriterias`) alike. It is
+recommended for new code; existing callers keep today's silent behaviour until they opt in.
+
 ---
 
 ## Cursor-Based Pagination
