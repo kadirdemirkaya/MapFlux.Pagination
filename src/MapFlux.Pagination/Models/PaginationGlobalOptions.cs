@@ -8,4 +8,5 @@ public class PaginationGlobalOptions
     public bool StrictMode { get; set; }
     public string? DefaultSortProperty { get; set; }
     public bool EnsureDeterministicOrder { get; set; }
+    public bool ValidateOnStart { get; set; }
 }

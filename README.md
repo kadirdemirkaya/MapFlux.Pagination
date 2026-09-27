@@ -69,6 +69,19 @@ builder.Services.AddMapFluxPagination(
     });
 ```
 
+Opt in to configuration validation with `ValidateOnStart`. When set, an incomplete map throws
+`InvalidOperationException` as soon as `IMapper` is resolved from the container instead of on the
+first `MapPagedAsync` call. Resolve it once right after building the app to fail fast at startup:
+
+```csharp
+builder.Services.AddMapFluxPagination(
+    cfg => cfg.AddProfile<UserProfile>(),
+    opts => opts.ValidateOnStart = true);
+
+var app = builder.Build();
+app.Services.GetRequiredService<IMapper>();
+```
+
 ### 3. Use in Controller
 
 ```csharp
