@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the invariant attempt fails the current culture is tried, so values that worked before — `"5,5"` on
   a server with a decimal comma — keep working. `Guid`, `DateOnly` and `TimeOnly` properties are
   parsed explicitly instead of dropping the filter and returning every row.
+- A filter value of `null` against `Equals` or `NotEquals` on a non-nullable property no longer throws
+  `ArgumentException`. `Equals` now matches no rows and `NotEquals` matches every row; with
+  `PaginationOptions.StrictMode` enabled it throws `PaginationStrictModeException` instead. Behaviour
+  on a nullable property is unchanged.
 
 ### Security
 
