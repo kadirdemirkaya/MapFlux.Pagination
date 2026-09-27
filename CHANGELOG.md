@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ArgumentException`. `Equals` now matches no rows and `NotEquals` matches every row; with
   `PaginationOptions.StrictMode` enabled it throws `PaginationStrictModeException` instead. Behaviour
   on a nullable property is unchanged.
+- `SearchTerm` is now lowercased with the invariant culture instead of the server's current culture.
+  Under `tr-TR`, `"IDEM"` used to lowercase to `"ıdem"` (dotless i), which never matched the database
+  side's culture-independent `lower()`, silently returning no rows. The property values themselves
+  are still lowercased in the query expression, unaffected by this change.
 
 ### Security
 

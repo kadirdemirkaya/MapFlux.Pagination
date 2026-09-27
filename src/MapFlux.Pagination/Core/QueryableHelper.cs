@@ -174,7 +174,7 @@ public static class QueryableHelper
 
         var containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) })!;
         var toLowerMethod = typeof(string).GetMethod("ToLower", Type.EmptyTypes)!;
-        var searchValue = Expression.Constant(searchTerm.ToLower());
+        var searchValue = Expression.Constant(searchTerm.ToLowerInvariant());
 
         Expression? combinedExpression = null;
 
