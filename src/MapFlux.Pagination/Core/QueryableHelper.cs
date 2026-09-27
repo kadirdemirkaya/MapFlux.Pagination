@@ -107,11 +107,11 @@ public static class QueryableHelper
         var type = typeof(T);
         var parameter = Expression.Parameter(type, "p");
 
-        // Determine which properties to search
         var properties = searchProperties != null && searchProperties.Count > 0
             ? searchProperties
                 .Select(name => type.GetProperty(name, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance))
                 .Where(p => p != null && p.PropertyType == typeof(string))
+                .Cast<PropertyInfo>()
                 .ToList()
             : type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.PropertyType == typeof(string))
@@ -131,9 +131,7 @@ public static class QueryableHelper
             if (prop == null) continue;
 
             var propertyAccess = Expression.MakeMemberAccess(parameter, prop);
-            // null check: p.Prop != null
             var nullCheck = Expression.NotEqual(propertyAccess, Expression.Constant(null, typeof(string)));
-            // p.Prop.ToLower().Contains(searchTerm)
             var toLower = Expression.Call(propertyAccess, toLowerMethod);
             var containsCall = Expression.Call(toLower, containsMethod, searchValue);
             var safeContains = Expression.AndAlso(nullCheck, containsCall);
@@ -152,13 +150,10 @@ public static class QueryableHelper
 
     public static IQueryable<T> ApplyFullPipeline<T>(IQueryable<T> source, PaginationOptions opts)
     {
-        // 1. Apply filtering
         var query = ApplyFiltering(source, opts.Filters);
 
-        // 2. Apply search
         query = ApplySearch(query, opts.SearchTerm, opts.SearchProperties);
 
-        // 3. Apply sorting (multi-sort takes precedence over single sort)
         if (opts.SortCriterias != null && opts.SortCriterias.Count > 0)
             query = ApplyMultiSorting(query, opts.SortCriterias);
         else
@@ -177,13 +172,11 @@ public static class QueryableHelper
 
         var query = source;
 
-        // Apply sorting
         if (!string.IsNullOrWhiteSpace(opts.SortBy))
             query = ApplySorting(query, opts.SortBy, opts.SortDescending);
         else
             query = ApplySorting(query, opts.CursorProperty, false);
 
-        // Apply cursor filter
         if (!string.IsNullOrWhiteSpace(opts.After))
         {
             var cursorValue = DecodeCursor(opts.After, cursorProperty.PropertyType);
