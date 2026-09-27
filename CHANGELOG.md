@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Calling `AddMapFluxPagination` more than once no longer loses the earlier call's profiles or
+  global options. Each call now adds its `Action<MapperConfigurationBuilder>` and
+  `Action<PaginationGlobalOptions>` delegate to a shared accumulator instead of registering a new
+  `IMapper` / `PaginationGlobalOptions` singleton that replaced the previous one; the resolved
+  `IMapper` applies every accumulated profile delegate, and the resolved `PaginationGlobalOptions`
+  applies every accumulated options delegate, in call order. It used to leave only the last call's
+  profiles resolvable, so mapping a type registered by an earlier call threw
+  `InvalidOperationException: Mapping from … to … is not defined`. A single call's behaviour is
+  unchanged.
 - `CursorPaginationOptions.Before` now returns the page that precedes the cursor. The query is ordered in
   the reverse of the requested direction, reads `PageSize + 1` rows and the page is turned back into the
   requested order, so with 20 rows and `PageSize = 5` a `Before` pointing at row 16 comes back as
