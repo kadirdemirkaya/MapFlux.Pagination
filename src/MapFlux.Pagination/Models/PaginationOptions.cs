@@ -34,7 +34,15 @@ public record PaginationOptions
 
     public bool StrictMode { get; init; }
 
-    public int Skip => (PageNumber - 1) * PageSize;
+    public int Skip
+    {
+        get
+        {
+            var skip = (long)(PageNumber - 1) * PageSize;
+            return skip > int.MaxValue ? int.MaxValue : (int)skip;
+        }
+    }
+
     public int Take => PageSize;
 
     public PaginationOptions ClampPageSize(int maxPageSize)

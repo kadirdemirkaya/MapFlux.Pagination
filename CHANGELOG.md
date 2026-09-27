@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `PaginationOptions.Skip` now computes the offset as a `long` internally before narrowing back to
+  `int`; a page number large enough to overflow `int` arithmetic (e.g. `PageNumber = int.MaxValue`
+  with `PageSize = 100`) used to wrap into a negative offset and silently return page one instead of
+  the requested page. It now clamps to `int.MaxValue`, which yields an empty page while `TotalCount`
+  stays correct. The public `Skip` type is unchanged (`int`).
 - `PaginationGlobalOptions.MaxPageSize` is now enforced: `IPaginatedMapper<,>.MapPagedAsync` and
   `MapCursorPagedAsync` clamp the requested `PageSize` down to the configured limit before running
   the query, instead of the registered options being ignored. A caller that has configured a limit

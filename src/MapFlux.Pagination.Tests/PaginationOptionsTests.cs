@@ -21,6 +21,17 @@ public class PaginationOptionsTests
     }
 
     [Fact]
+    public void Skip_ShouldClampToIntMaxValue_WhenComputationOverflowsInt()
+    {
+        // Arrange & Act
+        var opts = new PaginationOptions { PageNumber = int.MaxValue, PageSize = 100 };
+
+        // Assert
+        Assert.Equal(int.MaxValue, opts.Skip);
+        Assert.Equal(100, opts.Take);
+    }
+
+    [Fact]
     public void DefaultValues_ShouldBeCorrect()
     {
         // Arrange & Act
