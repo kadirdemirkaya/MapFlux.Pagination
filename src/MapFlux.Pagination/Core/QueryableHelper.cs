@@ -322,6 +322,16 @@ public static class QueryableHelper
             return null;
         }
 
+        if (value == null && !AcceptsNull(propertyType))
+        {
+            if (strict)
+                throw new PaginationStrictModeException(
+                    $"Filter value 'null' cannot be applied to non-nullable property '{propertyName}' of type '{propertyType}'.",
+                    propertyName, null, propertyType);
+
+            return Expression.Constant(op == FilterOperator.NotEquals);
+        }
+
         Expression constant;
         if (value == null)
         {
