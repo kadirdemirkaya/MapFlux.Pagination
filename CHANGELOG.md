@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `PagedResult<T>.TotalPages` no longer overflows to `int.MaxValue` (with `HasNextPage` then `true`)
+  when `PageSize` is `0` or negative; it now returns `0`, and `HasNextPage` follows as `false`. The
+  constructor still accepts any `PageSize` without throwing.
 - `ToPagedAsync` and `ToCursorPagedAsync` now fall back to a synchronous `Count`/`ToList` when the
   source `IQueryable`'s provider does not implement `IAsyncQueryProvider` (e.g. a plain
   `list.AsQueryable()`), instead of throwing `InvalidOperationException`. A source backed by an EF

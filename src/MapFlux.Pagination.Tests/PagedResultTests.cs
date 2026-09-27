@@ -41,4 +41,38 @@ public class PagedResultTests
         Assert.False(result.HasNextPage);
         Assert.True(result.HasPreviousPage);
     }
+
+    [Fact]
+    public void PagedResult_ShouldReturn_ZeroTotalPages_WhenPageSizeIsZero()
+    {
+        // Arrange
+        var items = new List<int>();
+        var totalCount = 5;
+        var pageNumber = 1;
+        var pageSize = 0;
+
+        // Act
+        var result = new PagedResult<int>(items, totalCount, pageNumber, pageSize);
+
+        // Assert
+        Assert.Equal(0, result.TotalPages);
+        Assert.False(result.HasNextPage);
+    }
+
+    [Fact]
+    public void PagedResult_ShouldReturn_ZeroTotalPages_WhenPageSizeIsNegative()
+    {
+        // Arrange
+        var items = new List<int>();
+        var totalCount = 5;
+        var pageNumber = 1;
+        var pageSize = -3;
+
+        // Act
+        var result = new PagedResult<int>(items, totalCount, pageNumber, pageSize);
+
+        // Assert
+        Assert.Equal(0, result.TotalPages);
+        Assert.False(result.HasNextPage);
+    }
 }
