@@ -39,13 +39,16 @@ public static class QueryableExtensions
         CancellationToken ct = default)
     {
         var total = await CountAsyncOrSync(source, ct).ConfigureAwait(false);
-        var query = QueryableHelper.ApplyCursorFilter(source, opts);
+        var plan = QueryableHelper.BuildCursorQuery(source, opts);
 
-        var items = await ToListAsyncOrSync(query.Take(opts.PageSize + 1), ct).ConfigureAwait(false);
-        var hasNextPage = items.Count > opts.PageSize;
+        var items = await ToListAsyncOrSync(plan.Query.Take(opts.PageSize + 1), ct).ConfigureAwait(false);
+        var hasMoreBeyondPage = items.Count > opts.PageSize;
 
-        if (hasNextPage)
+        if (hasMoreBeyondPage)
             items = items.Take(opts.PageSize).ToList();
+
+        if (plan.Reversed)
+            items.Reverse();
 
         string? startCursor = null;
         string? endCursor = null;
@@ -56,7 +59,8 @@ public static class QueryableExtensions
             endCursor = QueryableHelper.BuildCursor(items[^1], opts);
         }
 
-        var hasPreviousPage = !string.IsNullOrWhiteSpace(opts.After);
+        var hasNextPage = plan.Reversed || hasMoreBeyondPage;
+        var hasPreviousPage = plan.Reversed ? hasMoreBeyondPage : plan.CursorApplied;
 
         return new CursorPagedResult<T>(items, startCursor, endCursor, hasNextPage, hasPreviousPage, total);
     }
