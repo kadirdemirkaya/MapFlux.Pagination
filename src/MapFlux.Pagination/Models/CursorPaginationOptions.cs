@@ -11,6 +11,8 @@ public record CursorPaginationOptions
 
     public bool StrictMode { get; init; }
 
+    public bool IncludeTotalCount { get; init; } = true;
+
     public CursorPaginationOptions ClampPageSize(int maxPageSize)
     {
         if (PageSize <= maxPageSize)

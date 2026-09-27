@@ -41,7 +41,9 @@ public static class QueryableExtensions
         if (opts.PageSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(opts), opts.PageSize, "PageSize must be greater than or equal to 1.");
 
-        var total = await CountAsyncOrSync(source, ct).ConfigureAwait(false);
+        var total = opts.IncludeTotalCount
+            ? await CountAsyncOrSync(source, ct).ConfigureAwait(false)
+            : -1;
         var plan = QueryableHelper.BuildCursorQuery(source, opts);
 
         var items = await ToListAsyncOrSync(plan.Query.Take(opts.PageSize + 1), ct).ConfigureAwait(false);

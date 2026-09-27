@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   used by the `IQueryable` extensions, in memory (`AsQueryable()` + `QueryableHelper.ApplyFullPipeline`).
   `ToPaged(opts)` without the new parameter keeps slicing the collection by page only, ignoring
   `Filters`, `SearchTerm` and sorting exactly as before.
+- Opt-out `CursorPaginationOptions.IncludeTotalCount` (default `true`, today's behaviour) skips the
+  `COUNT(*)` query cursor paging runs alongside the page query. When set to `false`, only the page
+  query runs and `TotalCount` on the result is `-1`; `HasNextPage` / `HasPreviousPage` are unaffected,
+  since they were already derived from the page query, not the count.
 
 ### Fixed
 
