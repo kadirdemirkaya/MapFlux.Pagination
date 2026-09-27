@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -22,6 +21,20 @@ public static class QueryableHelper
         typeof(long), typeof(ulong), typeof(char), typeof(float), typeof(double), typeof(decimal),
         typeof(DateTime), typeof(DateTimeOffset), typeof(TimeSpan), typeof(DateOnly), typeof(TimeOnly)
     };
+
+    private static readonly MethodInfo StringContainsMethod = typeof(string).GetMethod(nameof(string.Contains), new[] { typeof(string) })!;
+
+    private static readonly MethodInfo StringStartsWithMethod = typeof(string).GetMethod(nameof(string.StartsWith), new[] { typeof(string) })!;
+
+    private static readonly MethodInfo StringEndsWithMethod = typeof(string).GetMethod(nameof(string.EndsWith), new[] { typeof(string) })!;
+
+    private static readonly MethodInfo StringToLowerMethod = typeof(string).GetMethod(nameof(string.ToLower), Type.EmptyTypes)!;
+
+    private static readonly MethodInfo StringCompareMethod = typeof(string).GetMethod(nameof(string.Compare), new[] { typeof(string), typeof(string) })!;
+
+    private static readonly ConstantExpression NullStringConstant = Expression.Constant(null, typeof(string));
+
+    private static readonly ConstantExpression ZeroConstant = Expression.Constant(0);
 
     public static IQueryable<T> ApplySorting<T>(IQueryable<T> source, string? sortBy, bool descending)
         => ApplySorting(source, sortBy, descending, strict: false);
@@ -54,13 +67,14 @@ public static class QueryableHelper
             return source;
 
         var type = typeof(T);
+        var metadata = TypeMetadata<T>.Instance;
         IQueryable<T> result = source;
         var hasOrder = false;
 
         for (int i = 0; i < sortCriterias.Count; i++)
         {
             var criteria = sortCriterias[i];
-            var property = type.GetProperty(criteria.PropertyName, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+            var property = metadata.FindProperty(criteria.PropertyName);
 
             if (property == null)
             {
@@ -82,9 +96,7 @@ public static class QueryableHelper
                 methodName = criteria.Descending ? "ThenByDescending" : "ThenBy";
 
             var resultExp = Expression.Call(
-                typeof(Queryable),
-                methodName,
-                new[] { type, property.PropertyType },
+                TypeMetadata.QueryableOrderMethod(methodName, type, property.PropertyType),
                 result.Expression,
                 Expression.Quote(orderByExp));
 
@@ -104,11 +116,12 @@ public static class QueryableHelper
             return source;
 
         var type = typeof(T);
+        var metadata = TypeMetadata<T>.Instance;
         var result = source;
 
         foreach (var filter in filters)
         {
-            var property = type.GetProperty(filter.PropertyName, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+            var property = metadata.FindProperty(filter.PropertyName);
             if (property == null)
             {
                 if (strict)
@@ -141,15 +154,16 @@ public static class QueryableHelper
             return source;
 
         var type = typeof(T);
+        var metadata = TypeMetadata<T>.Instance;
         var parameter = Expression.Parameter(type, "p");
 
-        List<PropertyInfo> properties;
+        IReadOnlyList<PropertyInfo> properties;
         if (searchProperties != null && searchProperties.Count > 0)
         {
-            properties = new List<PropertyInfo>();
+            var named = new List<PropertyInfo>(searchProperties.Count);
             foreach (var name in searchProperties)
             {
-                var candidate = type.GetProperty(name, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+                var candidate = metadata.FindProperty(name);
                 if (candidate == null || candidate.PropertyType != typeof(string))
                 {
                     if (strict)
@@ -160,33 +174,33 @@ public static class QueryableHelper
                     continue;
                 }
 
-                properties.Add(candidate);
+                named.Add(candidate);
             }
+
+            properties = named;
         }
         else
         {
-            properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.PropertyType == typeof(string))
-                .ToList();
+            properties = metadata.StringProperties;
         }
 
         if (properties.Count == 0)
             return source;
 
-        var containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) })!;
-        var toLowerMethod = typeof(string).GetMethod("ToLower", Type.EmptyTypes)!;
         var searchValue = Expression.Constant(searchTerm.ToLowerInvariant());
 
         Expression? combinedExpression = null;
 
-        foreach (var prop in properties)
+        for (int i = 0; i < properties.Count; i++)
         {
+            var prop = properties[i];
+
             if (prop == null) continue;
 
             var propertyAccess = Expression.MakeMemberAccess(parameter, prop);
-            var nullCheck = Expression.NotEqual(propertyAccess, Expression.Constant(null, typeof(string)));
-            var toLower = Expression.Call(propertyAccess, toLowerMethod);
-            var containsCall = Expression.Call(toLower, containsMethod, searchValue);
+            var nullCheck = Expression.NotEqual(propertyAccess, NullStringConstant);
+            var toLower = Expression.Call(propertyAccess, StringToLowerMethod);
+            var containsCall = Expression.Call(toLower, StringContainsMethod, searchValue);
             var safeContains = Expression.AndAlso(nullCheck, containsCall);
 
             combinedExpression = combinedExpression == null
@@ -212,7 +226,7 @@ public static class QueryableHelper
         if (opts.SortCriterias != null && opts.SortCriterias.Count > 0)
         {
             query = ApplyMultiSorting(query, opts.SortCriterias, opts.StrictMode);
-            ordered = opts.SortCriterias.Any(criteria => FindSortableProperty<T>(criteria.PropertyName) != null);
+            ordered = HasKnownSortProperty<T>(opts.SortCriterias);
         }
         else
         {
@@ -262,16 +276,25 @@ public static class QueryableHelper
         if (string.IsNullOrWhiteSpace(propertyName))
             return null;
 
-        return typeof(T).GetProperty(propertyName, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+        return TypeMetadata<T>.Instance.FindProperty(propertyName!);
+    }
+
+    private static bool HasKnownSortProperty<T>(IReadOnlyList<SortCriteria> sortCriterias)
+    {
+        for (int i = 0; i < sortCriterias.Count; i++)
+        {
+            if (FindSortableProperty<T>(sortCriterias[i].PropertyName) != null)
+                return true;
+        }
+
+        return false;
     }
 
     private static PropertyInfo? FindKeyProperty<T>()
     {
         var type = typeof(T);
 
-        var annotated = type
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .FirstOrDefault(property => property.CanRead && property.IsDefined(typeof(KeyAttribute), inherit: true));
+        var annotated = TypeMetadata<T>.Instance.AnnotatedKeyProperty;
 
         if (annotated != null)
             return annotated;
@@ -280,33 +303,21 @@ public static class QueryableHelper
     }
 
     private static IQueryable<T> OrderByProperty<T>(IQueryable<T> source, PropertyInfo property, bool descending)
-    {
-        var parameter = Expression.Parameter(typeof(T), "p");
-        var propertyAccess = Expression.MakeMemberAccess(parameter, property);
-        var orderByExp = Expression.Lambda(propertyAccess, parameter);
-
-        var resultExp = Expression.Call(
-            typeof(Queryable),
-            descending ? "OrderByDescending" : "OrderBy",
-            new[] { typeof(T), property.PropertyType },
-            source.Expression,
-            Expression.Quote(orderByExp));
-
-        return source.Provider.CreateQuery<T>(resultExp);
-    }
+        => ApplyOrderMethod(source, property, descending ? "OrderByDescending" : "OrderBy");
 
     private static IQueryable<T> ThenByProperty<T>(IQueryable<T> source, PropertyInfo property, bool descending)
+        => ApplyOrderMethod(source, property, descending ? "ThenByDescending" : "ThenBy");
+
+    private static IQueryable<T> ApplyOrderMethod<T>(IQueryable<T> source, PropertyInfo property, string methodName)
     {
         var parameter = Expression.Parameter(typeof(T), "p");
         var propertyAccess = Expression.MakeMemberAccess(parameter, property);
-        var thenByExp = Expression.Lambda(propertyAccess, parameter);
+        var keySelector = Expression.Lambda(propertyAccess, parameter);
 
         var resultExp = Expression.Call(
-            typeof(Queryable),
-            descending ? "ThenByDescending" : "ThenBy",
-            new[] { typeof(T), property.PropertyType },
+            TypeMetadata.QueryableOrderMethod(methodName, typeof(T), property.PropertyType),
             source.Expression,
-            Expression.Quote(thenByExp));
+            Expression.Quote(keySelector));
 
         return source.Provider.CreateQuery<T>(resultExp);
     }
@@ -482,16 +493,13 @@ public static class QueryableHelper
         }
 
         if (propertyType == typeof(string))
-        {
-            var compare = typeof(string).GetMethod(nameof(string.Compare), new[] { typeof(string), typeof(string) })!;
-            return CompareWithOperator(Expression.Call(compare, propertyAccess, constant), Expression.Constant(0), greaterThan);
-        }
+            return CompareWithOperator(Expression.Call(StringCompareMethod, propertyAccess, constant), ZeroConstant, greaterThan);
 
         if (!OperatorComparableTypes.Contains(propertyType))
         {
-            var compareTo = propertyType.GetMethod(nameof(IComparable.CompareTo), new[] { propertyType });
-            if (compareTo != null && compareTo.ReturnType == typeof(int))
-                return CompareWithOperator(Expression.Call(propertyAccess, compareTo, constant), Expression.Constant(0), greaterThan);
+            var compareTo = TypeMetadata.FindCompareToMethod(propertyType);
+            if (compareTo != null)
+                return CompareWithOperator(Expression.Call(propertyAccess, compareTo, constant), ZeroConstant, greaterThan);
         }
 
         return CompareWithOperator(propertyAccess, constant, greaterThan);
@@ -502,10 +510,10 @@ public static class QueryableHelper
         if (propertyType.IsEnum || propertyType == typeof(string) || OperatorComparableTypes.Contains(propertyType))
             return Expression.Equal(propertyAccess, constant);
 
-        var compareTo = propertyType.GetMethod(nameof(IComparable.CompareTo), new[] { propertyType });
+        var compareTo = TypeMetadata.FindCompareToMethod(propertyType);
 
-        if (compareTo != null && compareTo.ReturnType == typeof(int))
-            return Expression.Equal(Expression.Call(propertyAccess, compareTo, constant), Expression.Constant(0));
+        if (compareTo != null)
+            return Expression.Equal(Expression.Call(propertyAccess, compareTo, constant), ZeroConstant);
 
         return Expression.Equal(propertyAccess, constant);
     }
@@ -768,16 +776,15 @@ public static class QueryableHelper
                     return null;
                 }
 
-                var methodName = op switch
+                var method = op switch
                 {
-                    FilterOperator.Contains => "Contains",
-                    FilterOperator.StartsWith => "StartsWith",
-                    FilterOperator.EndsWith => "EndsWith",
+                    FilterOperator.Contains => StringContainsMethod,
+                    FilterOperator.StartsWith => StringStartsWithMethod,
+                    FilterOperator.EndsWith => StringEndsWithMethod,
                     _ => throw new InvalidOperationException()
                 };
 
-                var method = typeof(string).GetMethod(methodName, new[] { typeof(string) })!;
-                var nullCheck = Expression.NotEqual(propertyAccess, Expression.Constant(null, typeof(string)));
+                var nullCheck = Expression.NotEqual(propertyAccess, NullStringConstant);
                 var methodCall = Expression.Call(propertyAccess, method, constant);
                 return Expression.AndAlso(nullCheck, methodCall);
             }
