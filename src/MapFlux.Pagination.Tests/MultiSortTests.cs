@@ -54,4 +54,43 @@ public class MultiSortTests
         var result = QueryableHelper.ApplyMultiSorting(_items, new List<SortCriteria>()).ToList();
         Assert.Equal("Zebra", result[0].Name); // Original order
     }
+
+    [Fact]
+    public void ApplyMultiSorting_UnknownFirstCriteria_ShouldOrderByNextValidCriteria()
+    {
+        var criterias = new List<SortCriteria>
+        {
+            new() { PropertyName = "Nope", Descending = false },
+            new() { PropertyName = "Value", Descending = false }
+        };
+
+        var query = QueryableHelper.ApplyMultiSorting(_items, criterias);
+        var result = query.ToList();
+
+        Assert.Equal(4, result.Count);
+        Assert.Equal(10, result[0].Value);
+        Assert.Equal(10, result[1].Value);
+        Assert.Equal(10, result[2].Value);
+        Assert.Equal(20, result[3].Value);
+    }
+
+    [Fact]
+    public void ApplyMultiSorting_UnknownFirstAndSecondCriteria_ShouldOrderByThirdValidCriteria()
+    {
+        var criterias = new List<SortCriteria>
+        {
+            new() { PropertyName = "Nope", Descending = false },
+            new() { PropertyName = "AlsoNope", Descending = true },
+            new() { PropertyName = "Name", Descending = false }
+        };
+
+        var query = QueryableHelper.ApplyMultiSorting(_items, criterias);
+        var result = query.ToList();
+
+        Assert.Equal(4, result.Count);
+        Assert.Equal("Apple", result[0].Name);
+        Assert.Equal("Cat", result[1].Name);
+        Assert.Equal("Monkey", result[2].Name);
+        Assert.Equal("Zebra", result[3].Name);
+    }
 }

@@ -54,6 +54,7 @@ public static class QueryableHelper
 
         var type = typeof(T);
         IQueryable<T> result = source;
+        var hasOrder = false;
 
         for (int i = 0; i < sortCriterias.Count; i++)
         {
@@ -74,7 +75,7 @@ public static class QueryableHelper
             var orderByExp = Expression.Lambda(propertyAccess, parameter);
 
             string methodName;
-            if (i == 0)
+            if (!hasOrder)
                 methodName = criteria.Descending ? "OrderByDescending" : "OrderBy";
             else
                 methodName = criteria.Descending ? "ThenByDescending" : "ThenBy";
@@ -87,6 +88,7 @@ public static class QueryableHelper
                 Expression.Quote(orderByExp));
 
             result = result.Provider.CreateQuery<T>(resultExp);
+            hasOrder = true;
         }
 
         return result;
