@@ -16,6 +16,8 @@
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<IncludeSymbols>true</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<EnablePackageValidation>true</EnablePackageValidation>
+		<PackageValidationBaselineVersion>1.1.0</PackageValidationBaselineVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
