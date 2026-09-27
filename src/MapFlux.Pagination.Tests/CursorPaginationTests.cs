@@ -67,6 +67,22 @@ public class CursorPaginationTests
         Assert.Equal(expectedEnd, result.EndCursor);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public async Task CursorPagedAsync_NonPositivePageSize_ShouldThrowArgumentOutOfRangeException(int pageSize)
+    {
+        using var context = new TestDbContext();
+        var entities = Enumerable.Range(1, 15).Select(i => new TestEntity { Id = i, Code = $"C{i}" });
+        context.Entities.AddRange(entities);
+        await context.SaveChangesAsync();
+
+        var opts = new CursorPaginationOptions { PageSize = pageSize, CursorProperty = "Id" };
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => context.Entities.AsQueryable().ToCursorPagedAsync(opts));
+    }
+
     [Fact]
     public async Task CursorPagedAsync_NextPage_ShouldFilterUsingAfterCursor()
     {

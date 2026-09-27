@@ -38,6 +38,9 @@ public static class QueryableExtensions
         CursorPaginationOptions opts,
         CancellationToken ct = default)
     {
+        if (opts.PageSize <= 0)
+            throw new ArgumentOutOfRangeException(nameof(opts), opts.PageSize, "PageSize must be greater than or equal to 1.");
+
         var total = await CountAsyncOrSync(source, ct).ConfigureAwait(false);
         var plan = QueryableHelper.BuildCursorQuery(source, opts);
 

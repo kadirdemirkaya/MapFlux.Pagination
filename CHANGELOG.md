@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepted and, on a request with a separate sort key, are still applied to `CursorProperty` the way
   they were when they were issued. The new public helper `QueryableHelper.BuildCursor` builds the cursor
   for a row and the given options.
+- `ToCursorPagedAsync` now throws `ArgumentOutOfRangeException` for `CursorPaginationOptions.PageSize <= 0`
+  instead of returning an empty page with `HasNextPage = true`, a result a caller could not act on.
 - A `CursorProperty` whose type has no comparison operator is now compared with `CompareTo`, so `string`,
   `Guid` and `enum` cursor properties page instead of throwing. `CursorProperty = "Name"` used to fail with
   `InvalidOperationException: The binary operator GreaterThan is not defined for the types 'System.String'
