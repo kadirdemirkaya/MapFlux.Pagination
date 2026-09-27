@@ -47,6 +47,28 @@ public class QueryableExtensionsTests
     }
 
     [Fact]
+    public async Task ToPagedAsync_ShouldReturn_EmptyPage_WhenPageNumberOverflowsSkip()
+    {
+        // Arrange
+        using var context = new TestDbContext();
+        var entities = Enumerable.Range(1, 20).Select(i => new TestEntity { Id = i, Name = $"Item{i}" });
+        context.Entities.AddRange(entities);
+        await context.SaveChangesAsync();
+
+        var opts = new PaginationOptions { PageNumber = int.MaxValue, PageSize = 100 };
+
+        // Act
+        var result = await context.Entities.AsQueryable().ToPagedAsync(opts);
+
+        // Assert
+        Assert.Equal(20, result.TotalCount);
+        Assert.Empty(result.Items);
+        Assert.Equal(int.MaxValue, result.PageNumber);
+        Assert.True(result.HasPreviousPage);
+        Assert.False(result.HasNextPage);
+    }
+
+    [Fact]
     public async Task ToPagedAsync_ShouldApply_Sorting()
     {
         // Arrange
