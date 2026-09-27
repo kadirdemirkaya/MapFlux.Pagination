@@ -8,4 +8,12 @@ public record CursorPaginationOptions
     public string CursorProperty { get; init; } = "Id";
     public string? SortBy { get; init; }
     public bool SortDescending { get; init; }
+
+    public CursorPaginationOptions ClampPageSize(int maxPageSize)
+    {
+        if (PageSize <= maxPageSize)
+            return this;
+
+        return this with { PageSize = maxPageSize };
+    }
 }

@@ -8,18 +8,28 @@ namespace MapFlux.Pagination.Core;
 public class PaginatedMapper<TSource, TDest> : IPaginatedMapper<TSource, TDest>
 {
     private readonly IMapper _mapper;
+    private readonly PaginationGlobalOptions? _globalOptions;
 
     public PaginatedMapper(IMapper mapper)
+        : this(mapper, null)
+    {
+    }
+
+    public PaginatedMapper(IMapper mapper, PaginationGlobalOptions? globalOptions)
     {
         _mapper = mapper;
+        _globalOptions = globalOptions;
     }
 
     public async Task<IPagedResult<TDest>> MapPagedAsync(
-        IQueryable<TSource> source, 
-        PaginationOptions opts, 
+        IQueryable<TSource> source,
+        PaginationOptions opts,
         CancellationToken ct = default)
     {
-        var pagedSource = await source.ToPagedAsync(opts, ct);
+        if (_globalOptions is not null)
+            opts = opts.ClampPageSize(_globalOptions.MaxPageSize);
+
+        var pagedSource = await source.ToPagedAsync(opts, ct).ConfigureAwait(false);
         return MapPaged(pagedSource);
     }
 
@@ -35,7 +45,10 @@ public class PaginatedMapper<TSource, TDest> : IPaginatedMapper<TSource, TDest>
         CursorPaginationOptions opts,
         CancellationToken ct = default)
     {
-        var pagedSource = await source.ToCursorPagedAsync(opts, ct);
+        if (_globalOptions is not null)
+            opts = opts.ClampPageSize(_globalOptions.MaxPageSize);
+
+        var pagedSource = await source.ToCursorPagedAsync(opts, ct).ConfigureAwait(false);
         var mappedItems = _mapper.MapList<TSource, TDest>(pagedSource.Items);
 
         return new CursorPagedResult<TDest>(
