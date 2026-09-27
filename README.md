@@ -285,6 +285,28 @@ Response:
 }
 ```
 
+### Sort direction and a separate sort key
+
+`SortDescending` controls both the page order and the direction the cursor moves in: with
+`SortDescending = true` the rows come back in descending order and `After` continues *below* the cursor,
+so walking the pages of 20 rows with `PageSize = 5` yields `20…16`, then `15…11`.
+
+`SortBy` may name a property other than `CursorProperty`. The page is then ordered by `SortBy` with
+`CursorProperty` as the tie-breaker, and the cursor carries both values, so the next page resumes at
+exactly the right row even when many rows share the same sort key:
+
+```csharp
+var opts = new CursorPaginationOptions
+{
+    PageSize = 20,
+    SortBy = "CreatedAt",
+    CursorProperty = "Id",
+    SortDescending = true
+};
+```
+
+Both properties are read case-insensitively. Leaving `SortBy` unset orders by `CursorProperty` alone.
+
 ### Cursor format
 
 A cursor is an opaque Base64 string — treat it as a token to hand back unchanged, not as a value to
@@ -293,10 +315,15 @@ as the exact value it was issued for: a `DateTime` / `DateTimeOffset` keeps its 
 and a `decimal` or `double` keeps its full precision and means the same number regardless of the
 culture the server ran under when the cursor was issued.
 
+A cursor issued for a request whose `SortBy` differs from `CursorProperty` carries the two values
+together; one issued for a single sort key carries just that value. Both are Base64 and both are read
+back by the same decoder, so a client never has to tell them apart.
+
 Cursors issued by earlier versions of the package are still accepted: the decoder recognises the older
 payload and reads it the way it was written, so clients holding an old cursor keep paging without a
 reset. Those older cursors remain as precise as they were — a `DateTime` cursor written in the old
-format still carries only whole seconds.
+format still carries only whole seconds — and an old cursor presented on a request that now uses a
+separate sort key is still applied to `CursorProperty`, as it was when the cursor was issued.
 
 ### Cursor property types
 

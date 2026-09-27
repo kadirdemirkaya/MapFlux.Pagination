@@ -12,6 +12,10 @@ public static class QueryableHelper
 {
     private const string CursorVersionPrefix = "\u0001v1:";
 
+    private const string CompositeCursorVersionPrefix = "\u0001v2:";
+
+    private const char CompositeCursorLengthSeparator = ':';
+
     private static readonly HashSet<Type> OperatorComparableTypes = new()
     {
         typeof(byte), typeof(sbyte), typeof(short), typeof(ushort), typeof(int), typeof(uint),
@@ -291,30 +295,41 @@ public static class QueryableHelper
         return source.Provider.CreateQuery<T>(resultExp);
     }
 
+    private static IQueryable<T> ThenByProperty<T>(IQueryable<T> source, PropertyInfo property, bool descending)
+    {
+        var parameter = Expression.Parameter(typeof(T), "p");
+        var propertyAccess = Expression.MakeMemberAccess(parameter, property);
+        var thenByExp = Expression.Lambda(propertyAccess, parameter);
+
+        var resultExp = Expression.Call(
+            typeof(Queryable),
+            descending ? "ThenByDescending" : "ThenBy",
+            new[] { typeof(T), property.PropertyType },
+            source.Expression,
+            Expression.Quote(thenByExp));
+
+        return source.Provider.CreateQuery<T>(resultExp);
+    }
+
     public static IQueryable<T> ApplyCursorFilter<T>(IQueryable<T> source, CursorPaginationOptions opts)
     {
-        var type = typeof(T);
-        var cursorProperty = type.GetProperty(opts.CursorProperty, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+        var cursorProperty = FindSortableProperty<T>(opts.CursorProperty);
 
         if (cursorProperty == null)
             return source;
 
-        var query = source;
-
-        if (!string.IsNullOrWhiteSpace(opts.SortBy))
-            query = ApplySorting(query, opts.SortBy, opts.SortDescending);
-        else
-            query = ApplySorting(query, opts.CursorProperty, false);
+        var sortProperty = FindSortableProperty<T>(opts.SortBy);
+        var query = ApplyCursorOrdering(source, sortProperty, cursorProperty, opts);
 
         if (!string.IsNullOrWhiteSpace(opts.After))
         {
-            var lambda = BuildCursorPredicate<T>(cursorProperty, opts.After!, greaterThan: true);
+            var lambda = BuildCursorPredicate<T>(sortProperty, cursorProperty, opts.After!, greaterThan: !opts.SortDescending);
             if (lambda != null)
                 query = query.Where(lambda);
         }
         else if (!string.IsNullOrWhiteSpace(opts.Before))
         {
-            var lambda = BuildCursorPredicate<T>(cursorProperty, opts.Before!, greaterThan: false);
+            var lambda = BuildCursorPredicate<T>(sortProperty, cursorProperty, opts.Before!, greaterThan: opts.SortDescending);
             if (lambda != null)
                 query = query.Where(lambda);
         }
@@ -322,13 +337,94 @@ public static class QueryableHelper
         return query;
     }
 
-    private static Expression<Func<T, bool>>? BuildCursorPredicate<T>(PropertyInfo cursorProperty, string cursor, bool greaterThan)
+    /// <summary>
+    /// Builds the cursor that points at <paramref name="item"/> for the given options. When
+    /// <see cref="CursorPaginationOptions.SortBy"/> names a property other than
+    /// <see cref="CursorPaginationOptions.CursorProperty"/>, the cursor carries both the sort key and the
+    /// tie-breaking cursor value so the next page continues the keyset without skipping or repeating rows.
+    /// </summary>
+    /// <param name="item">The row the cursor should point at.</param>
+    /// <param name="opts">The cursor pagination options the page was read with.</param>
+    /// <returns>The Base64 cursor, or <see langword="null"/> when no cursor can be built for the row.</returns>
+    public static string? BuildCursor<T>(T item, CursorPaginationOptions opts)
     {
+        if (item == null)
+            return null;
+
+        var cursorProperty = FindSortableProperty<T>(opts.CursorProperty);
+        var cursorValue = cursorProperty?.GetValue(item);
+
+        if (cursorValue == null)
+            return null;
+
+        var sortProperty = FindSortableProperty<T>(opts.SortBy);
+
+        if (sortProperty == null || IsSameProperty(sortProperty, cursorProperty!))
+            return EncodeCursor(cursorValue);
+
+        var sortValue = sortProperty.GetValue(item);
+
+        return sortValue == null
+            ? EncodeCursor(cursorValue)
+            : EncodeCompositeCursor(sortValue, cursorValue);
+    }
+
+    private static IQueryable<T> ApplyCursorOrdering<T>(
+        IQueryable<T> source,
+        PropertyInfo? sortProperty,
+        PropertyInfo cursorProperty,
+        CursorPaginationOptions opts)
+    {
+        if (sortProperty == null)
+            return string.IsNullOrWhiteSpace(opts.SortBy)
+                ? OrderByProperty(source, cursorProperty, opts.SortDescending)
+                : source;
+
+        if (IsSameProperty(sortProperty, cursorProperty))
+            return OrderByProperty(source, cursorProperty, opts.SortDescending);
+
+        return ThenByProperty(
+            OrderByProperty(source, sortProperty, opts.SortDescending),
+            cursorProperty,
+            opts.SortDescending);
+    }
+
+    private static bool IsSameProperty(PropertyInfo left, PropertyInfo right)
+        => string.Equals(left.Name, right.Name, StringComparison.Ordinal);
+
+    private static Expression<Func<T, bool>>? BuildCursorPredicate<T>(
+        PropertyInfo? sortProperty,
+        PropertyInfo cursorProperty,
+        string cursor,
+        bool greaterThan)
+    {
+        var parameter = Expression.Parameter(typeof(T), "p");
+
+        if (sortProperty != null && !IsSameProperty(sortProperty, cursorProperty))
+        {
+            var composite = DecodeCompositeCursor(cursor, sortProperty.PropertyType, cursorProperty.PropertyType);
+
+            if (composite != null)
+            {
+                var sortAccess = Expression.MakeMemberAccess(parameter, sortProperty);
+                var sortConstant = Expression.Constant(composite.Value.SortValue, sortProperty.PropertyType);
+                var tieAccess = Expression.MakeMemberAccess(parameter, cursorProperty);
+                var tieConstant = Expression.Constant(composite.Value.CursorValue, cursorProperty.PropertyType);
+
+                var beyondSortKey = BuildCursorComparison(sortAccess, sortConstant, sortProperty.PropertyType, greaterThan);
+                var onSortKey = BuildCursorEquality(sortAccess, sortConstant, sortProperty.PropertyType);
+                var beyondTieBreaker = BuildCursorComparison(tieAccess, tieConstant, cursorProperty.PropertyType, greaterThan);
+
+                var keyset = Expression.OrElse(beyondSortKey, Expression.AndAlso(onSortKey, beyondTieBreaker));
+
+                return Expression.Lambda<Func<T, bool>>(keyset, parameter);
+            }
+        }
+
         var cursorValue = DecodeCursor(cursor, cursorProperty.PropertyType);
         if (cursorValue == null)
             return null;
 
-        var parameter = Expression.Parameter(typeof(T), "p");
         var propertyAccess = Expression.MakeMemberAccess(parameter, cursorProperty);
         var constant = Expression.Constant(cursorValue, cursorProperty.PropertyType);
         var comparison = BuildCursorComparison(propertyAccess, constant, cursorProperty.PropertyType, greaterThan);
@@ -363,6 +459,19 @@ public static class QueryableHelper
         return CompareWithOperator(propertyAccess, constant, greaterThan);
     }
 
+    private static Expression BuildCursorEquality(Expression propertyAccess, Expression constant, Type propertyType)
+    {
+        if (propertyType.IsEnum || propertyType == typeof(string) || OperatorComparableTypes.Contains(propertyType))
+            return Expression.Equal(propertyAccess, constant);
+
+        var compareTo = propertyType.GetMethod(nameof(IComparable.CompareTo), new[] { propertyType });
+
+        if (compareTo != null && compareTo.ReturnType == typeof(int))
+            return Expression.Equal(Expression.Call(propertyAccess, compareTo, constant), Expression.Constant(0));
+
+        return Expression.Equal(propertyAccess, constant);
+    }
+
     private static Expression CompareWithOperator(Expression left, Expression right, bool greaterThan)
         => greaterThan ? Expression.GreaterThan(left, right) : Expression.LessThan(left, right);
 
@@ -382,7 +491,8 @@ public static class QueryableHelper
     /// <summary>
     /// Decodes a Base64 cursor back into a value of <paramref name="targetType"/>. Cursors written by
     /// the versioned format are read invariantly; cursors issued by earlier versions of this package
-    /// are still accepted and read the way they were written.
+    /// are still accepted and read the way they were written. For a composite cursor the tie-breaking
+    /// cursor value is returned.
     /// </summary>
     /// <param name="cursor">The Base64 cursor received from the client.</param>
     /// <param name="targetType">The type of the cursor property.</param>
@@ -397,12 +507,78 @@ public static class QueryableHelper
             if (stringValue.StartsWith(CursorVersionPrefix, StringComparison.Ordinal))
                 return ParseVersionedCursor(stringValue.Substring(CursorVersionPrefix.Length), targetType);
 
+            if (stringValue.StartsWith(CompositeCursorVersionPrefix, StringComparison.Ordinal))
+            {
+                var parts = SplitCompositeCursor(stringValue);
+
+                return parts == null ? null : ParseVersionedCursor(parts.Value.CursorText, targetType);
+            }
+
             return ParseLegacyCursor(stringValue, targetType);
         }
         catch
         {
             return null;
         }
+    }
+
+    private static string EncodeCompositeCursor(object sortValue, object cursorValue)
+    {
+        var sortText = FormatCursorValue(sortValue);
+        var payload = CompositeCursorVersionPrefix
+            + sortText.Length.ToString(CultureInfo.InvariantCulture)
+            + CompositeCursorLengthSeparator
+            + sortText
+            + FormatCursorValue(cursorValue);
+
+        return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(payload));
+    }
+
+    private static (object SortValue, object CursorValue)? DecodeCompositeCursor(string cursor, Type sortType, Type cursorType)
+    {
+        try
+        {
+            var bytes = Convert.FromBase64String(cursor);
+            var payload = System.Text.Encoding.UTF8.GetString(bytes);
+            var parts = SplitCompositeCursor(payload);
+
+            if (parts == null)
+                return null;
+
+            var sortValue = ParseVersionedCursor(parts.Value.SortText, sortType);
+            var cursorValue = ParseVersionedCursor(parts.Value.CursorText, cursorType);
+
+            if (sortValue == null || cursorValue == null)
+                return null;
+
+            return (sortValue, cursorValue);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static (string SortText, string CursorText)? SplitCompositeCursor(string payload)
+    {
+        if (!payload.StartsWith(CompositeCursorVersionPrefix, StringComparison.Ordinal))
+            return null;
+
+        var body = payload.Substring(CompositeCursorVersionPrefix.Length);
+        var separator = body.IndexOf(CompositeCursorLengthSeparator);
+
+        if (separator <= 0)
+            return null;
+
+        if (!int.TryParse(body.Substring(0, separator), NumberStyles.None, CultureInfo.InvariantCulture, out var sortLength))
+            return null;
+
+        var values = body.Substring(separator + 1);
+
+        if (sortLength > values.Length)
+            return null;
+
+        return (values.Substring(0, sortLength), values.Substring(sortLength));
     }
 
     private static string FormatCursorValue(object value) => value switch

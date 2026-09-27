@@ -29,6 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Cursor pagination now honours `SortDescending` and a `SortBy` that differs from `CursorProperty`.
+  The cursor filter follows the sort direction, so a descending request continues below the cursor
+  instead of above it: the second page of 20 rows with `PageSize = 5` used to come back as `20, 19, 18,
+  17` and is now `15, 14, 13, 12, 11`. When `SortBy` names another property, the page is ordered by that
+  property with `CursorProperty` as the tie-breaker and the cursor carries both values, so the next page
+  resumes at the right row; previously the filter narrowed on `CursorProperty` alone while the rows were
+  ordered by `SortBy`, which silently skipped rows. Cursors issued by earlier versions are still
+  accepted and, on a request with a separate sort key, are still applied to `CursorProperty` the way
+  they were when they were issued. The new public helper `QueryableHelper.BuildCursor` builds the cursor
+  for a row and the given options.
 - A `CursorProperty` whose type has no comparison operator is now compared with `CompareTo`, so `string`,
   `Guid` and `enum` cursor properties page instead of throwing. `CursorProperty = "Name"` used to fail with
   `InvalidOperationException: The binary operator GreaterThan is not defined for the types 'System.String'
