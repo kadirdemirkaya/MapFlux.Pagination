@@ -12,15 +12,13 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services, 
         Action<MapperConfigurationBuilder>? configure = null)
     {
-        // 1. Register MapFlux core mapper (singleton - profiles are immutable)
-        services.AddSingleton<IMapper>(sp => 
+        services.AddSingleton<IMapper>(sp =>
         {
             var m = new Mapper();
             configure?.Invoke(new MapperConfigurationBuilder(m));
             return m;
         });
 
-        // 2. Register the generic paginated mapper (open generic)
         services.AddScoped(
             typeof(IPaginatedMapper<,>), 
             typeof(PaginatedMapper<,>));
@@ -33,12 +31,10 @@ public static class ServiceCollectionExtensions
         Action<MapperConfigurationBuilder>? configure,
         Action<PaginationGlobalOptions>? globalOptions)
     {
-        // 1. Register global options
         var options = new PaginationGlobalOptions();
         globalOptions?.Invoke(options);
         services.AddSingleton(options);
 
-        // 2. Register core services
         services.AddMapFluxPagination(configure);
 
         return services;

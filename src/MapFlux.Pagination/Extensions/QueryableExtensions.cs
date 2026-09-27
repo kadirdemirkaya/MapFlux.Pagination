@@ -40,7 +40,6 @@ public static class QueryableExtensions
         var total = await source.CountAsync(ct);
         var query = QueryableHelper.ApplyCursorFilter(source, opts);
 
-        // Take PageSize + 1 to determine if there are more items
         var items = await query.Take(opts.PageSize + 1).ToListAsync(ct);
         var hasNextPage = items.Count > opts.PageSize;
 

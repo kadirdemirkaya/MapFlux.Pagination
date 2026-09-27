@@ -10,8 +10,8 @@ namespace MapFlux.Pagination.Tests;
 
 public class PaginatedMapperTests
 {
-    private class User { public int Id { get; set; } public string Name { get; set; } }
-    private class UserDto { public int Id { get; set; } public string FullName { get; set; } }
+    private class User { public int Id { get; set; } public string Name { get; set; } = string.Empty; }
+    private class UserDto { public int Id { get; set; } public string FullName { get; set; } = string.Empty; }
 
     private class UserProfile : Profile
     {
