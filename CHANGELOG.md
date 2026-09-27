@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on, a `DefaultSortProperty` the type does not have, or a type whose key cannot be resolved, throws
   `PaginationStrictModeException` instead of silently staying unordered. The new public helper
   `QueryableHelper.ApplyDefaultOrdering` applies the same stage on its own.
+- Opt-in overloads `IEnumerable<T>.ToPaged(opts, applyPipeline: true)` and the mapped
+  `ToPaged<TSource, TDest>(mapper, opts, applyPipeline: true)` run the same filter/search/sort pipeline
+  used by the `IQueryable` extensions, in memory (`AsQueryable()` + `QueryableHelper.ApplyFullPipeline`).
+  `ToPaged(opts)` without the new parameter keeps slicing the collection by page only, ignoring
+  `Filters`, `SearchTerm` and sorting exactly as before.
 
 ### Fixed
 
