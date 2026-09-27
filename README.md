@@ -158,6 +158,21 @@ var opts = new PaginationOptions
 var result = await _mapper.MapPagedAsync(_db.Users, opts);
 ```
 
+`FilterCriteria.Value` is an `object?`, so the same options can be bound straight from a request body.
+JSON numbers, strings and booleans are converted to the target property's type — including a
+`Nullable<T>` property, where `null` matches the rows whose value is not set:
+
+```json
+{
+  "pageNumber": 1,
+  "pageSize": 10,
+  "filters": [
+    { "propertyName": "IsActive", "operator": 0, "value": true },
+    { "propertyName": "Age", "operator": 6, "value": 18 }
+  ]
+}
+```
+
 ---
 
 ## Cursor-Based Pagination

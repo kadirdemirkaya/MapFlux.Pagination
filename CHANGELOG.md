@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `FilterCriteria.Value` arriving as JSON (a `JsonElement`, as when `PaginationOptions` is bound from
+  a request body) is now converted to the filtered property's type instead of being discarded, which
+  silently dropped the filter and returned every row. Numbers, strings and booleans are converted,
+  `Nullable<T>` properties use their underlying type, and a JSON `null` on a property that accepts
+  null matches the rows whose value is not set.
+
 ### Security
 
 - Patched a High severity transitive dependency vulnerability (net6.0, net8.0, net9.0) and updated
