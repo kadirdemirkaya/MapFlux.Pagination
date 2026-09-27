@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
+using MapFlux.Pagination.Exceptions;
 using MapFlux.Pagination.Models;
 
 namespace MapFlux.Pagination.Core;
@@ -9,6 +10,9 @@ namespace MapFlux.Pagination.Core;
 public static class QueryableHelper
 {
     public static IQueryable<T> ApplySorting<T>(IQueryable<T> source, string? sortBy, bool descending)
+        => ApplySorting(source, sortBy, descending, strict: false);
+
+    public static IQueryable<T> ApplySorting<T>(IQueryable<T> source, string? sortBy, bool descending, bool strict)
     {
         if (string.IsNullOrWhiteSpace(sortBy))
             return source;
@@ -17,7 +21,13 @@ public static class QueryableHelper
         var property = type.GetProperty(sortBy, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
 
         if (property == null)
+        {
+            if (strict)
+                throw new PaginationStrictModeException(
+                    $"Unknown sort property '{sortBy}' on type '{type}'.", sortBy, null, null);
+
             return source;
+        }
 
         var parameter = Expression.Parameter(type, "p");
         var propertyAccess = Expression.MakeMemberAccess(parameter, property);
@@ -35,6 +45,9 @@ public static class QueryableHelper
     }
 
     public static IQueryable<T> ApplyMultiSorting<T>(IQueryable<T> source, IReadOnlyList<SortCriteria>? sortCriterias)
+        => ApplyMultiSorting(source, sortCriterias, strict: false);
+
+    public static IQueryable<T> ApplyMultiSorting<T>(IQueryable<T> source, IReadOnlyList<SortCriteria>? sortCriterias, bool strict)
     {
         if (sortCriterias == null || sortCriterias.Count == 0)
             return source;
@@ -48,7 +61,13 @@ public static class QueryableHelper
             var property = type.GetProperty(criteria.PropertyName, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
 
             if (property == null)
+            {
+                if (strict)
+                    throw new PaginationStrictModeException(
+                        $"Unknown sort property '{criteria.PropertyName}' on type '{type}'.", criteria.PropertyName, null, null);
+
                 continue;
+            }
 
             var parameter = Expression.Parameter(type, "p");
             var propertyAccess = Expression.MakeMemberAccess(parameter, property);
@@ -74,6 +93,9 @@ public static class QueryableHelper
     }
 
     public static IQueryable<T> ApplyFiltering<T>(IQueryable<T> source, IReadOnlyList<FilterCriteria>? filters)
+        => ApplyFiltering(source, filters, strict: false);
+
+    public static IQueryable<T> ApplyFiltering<T>(IQueryable<T> source, IReadOnlyList<FilterCriteria>? filters, bool strict)
     {
         if (filters == null || filters.Count == 0)
             return source;
@@ -85,11 +107,17 @@ public static class QueryableHelper
         {
             var property = type.GetProperty(filter.PropertyName, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
             if (property == null)
+            {
+                if (strict)
+                    throw new PaginationStrictModeException(
+                        $"Unknown filter property '{filter.PropertyName}' on type '{type}'.", filter.PropertyName, filter.Value, null);
+
                 continue;
+            }
 
             var parameter = Expression.Parameter(type, "p");
             var propertyAccess = Expression.MakeMemberAccess(parameter, property);
-            var filterExpression = BuildFilterExpression(propertyAccess, filter.Operator, filter.Value, property.PropertyType);
+            var filterExpression = BuildFilterExpression(propertyAccess, filter, property.PropertyType, strict);
 
             if (filterExpression == null)
                 continue;
@@ -102,6 +130,9 @@ public static class QueryableHelper
     }
 
     public static IQueryable<T> ApplySearch<T>(IQueryable<T> source, string? searchTerm, IReadOnlyList<string>? searchProperties)
+        => ApplySearch(source, searchTerm, searchProperties, strict: false);
+
+    public static IQueryable<T> ApplySearch<T>(IQueryable<T> source, string? searchTerm, IReadOnlyList<string>? searchProperties, bool strict)
     {
         if (string.IsNullOrWhiteSpace(searchTerm))
             return source;
@@ -109,15 +140,32 @@ public static class QueryableHelper
         var type = typeof(T);
         var parameter = Expression.Parameter(type, "p");
 
-        var properties = searchProperties != null && searchProperties.Count > 0
-            ? searchProperties
-                .Select(name => type.GetProperty(name, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance))
-                .Where(p => p != null && p.PropertyType == typeof(string))
-                .Cast<PropertyInfo>()
-                .ToList()
-            : type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        List<PropertyInfo> properties;
+        if (searchProperties != null && searchProperties.Count > 0)
+        {
+            properties = new List<PropertyInfo>();
+            foreach (var name in searchProperties)
+            {
+                var candidate = type.GetProperty(name, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+                if (candidate == null || candidate.PropertyType != typeof(string))
+                {
+                    if (strict)
+                        throw new PaginationStrictModeException(
+                            $"Unknown search property '{name}' on type '{type}'; expected an existing public string property.",
+                            name, null, candidate?.PropertyType);
+
+                    continue;
+                }
+
+                properties.Add(candidate);
+            }
+        }
+        else
+        {
+            properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.PropertyType == typeof(string))
                 .ToList();
+        }
 
         if (properties.Count == 0)
             return source;
@@ -152,14 +200,14 @@ public static class QueryableHelper
 
     public static IQueryable<T> ApplyFullPipeline<T>(IQueryable<T> source, PaginationOptions opts)
     {
-        var query = ApplyFiltering(source, opts.Filters);
+        var query = ApplyFiltering(source, opts.Filters, opts.StrictMode);
 
-        query = ApplySearch(query, opts.SearchTerm, opts.SearchProperties);
+        query = ApplySearch(query, opts.SearchTerm, opts.SearchProperties, opts.StrictMode);
 
         if (opts.SortCriterias != null && opts.SortCriterias.Count > 0)
-            query = ApplyMultiSorting(query, opts.SortCriterias);
+            query = ApplyMultiSorting(query, opts.SortCriterias, opts.StrictMode);
         else
-            query = ApplySorting(query, opts.SortBy, opts.SortDescending);
+            query = ApplySorting(query, opts.SortBy, opts.SortDescending, opts.StrictMode);
 
         return query;
     }
@@ -243,18 +291,36 @@ public static class QueryableHelper
         }
     }
 
-    private static Expression? BuildFilterExpression(Expression propertyAccess, FilterOperator op, object? value, Type propertyType)
+    private static Expression? BuildFilterExpression(Expression propertyAccess, FilterCriteria filter, Type propertyType, bool strict)
     {
+        var op = filter.Operator;
+        var value = filter.Value;
+        var propertyName = filter.PropertyName;
+
         if (value is JsonElement nullCandidate && IsJsonNull(nullCandidate))
         {
             if (!AcceptsNull(propertyType))
+            {
+                if (strict)
+                    throw new PaginationStrictModeException(
+                        $"Filter value 'null' cannot be applied to non-nullable property '{propertyName}' of type '{propertyType}'.",
+                        propertyName, null, propertyType);
+
                 return null;
+            }
 
             value = null;
         }
 
         if (value == null && op != FilterOperator.Equals && op != FilterOperator.NotEquals)
+        {
+            if (strict)
+                throw new PaginationStrictModeException(
+                    $"Filter operator '{op}' cannot be used with a null value on property '{propertyName}'.",
+                    propertyName, null, propertyType);
+
             return null;
+        }
 
         Expression constant;
         if (value == null)
@@ -265,7 +331,14 @@ public static class QueryableHelper
         {
             var convertedValue = ConvertValue(value, propertyType);
             if (convertedValue == null)
+            {
+                if (strict)
+                    throw new PaginationStrictModeException(
+                        $"Filter value '{value}' on property '{propertyName}' could not be converted to type '{propertyType}'.",
+                        propertyName, value, propertyType);
+
                 return null;
+            }
             constant = Expression.Constant(convertedValue, propertyType);
         }
 
@@ -294,7 +367,14 @@ public static class QueryableHelper
             case FilterOperator.EndsWith:
             {
                 if (propertyType != typeof(string))
+                {
+                    if (strict)
+                        throw new PaginationStrictModeException(
+                            $"Filter operator '{op}' is not supported on property '{propertyName}' of type '{propertyType}'; it requires a string property.",
+                            propertyName, value, propertyType);
+
                     return null;
+                }
 
                 var methodName = op switch
                 {
@@ -311,6 +391,10 @@ public static class QueryableHelper
             }
 
             default:
+                if (strict)
+                    throw new PaginationStrictModeException(
+                        $"Unsupported filter operator '{op}' on property '{propertyName}'.", propertyName, value, propertyType);
+
                 return null;
         }
     }

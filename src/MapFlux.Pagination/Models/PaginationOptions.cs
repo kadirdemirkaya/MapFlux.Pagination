@@ -32,6 +32,8 @@ public record PaginationOptions
 
     public IReadOnlyList<string>? SearchProperties { get; init; }
 
+    public bool StrictMode { get; init; }
+
     public int Skip => (PageNumber - 1) * PageSize;
     public int Take => PageSize;
 

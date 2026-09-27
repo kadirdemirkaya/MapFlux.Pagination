@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in `PaginationOptions.StrictMode`: when enabled, an unknown filter/search/sort property, a
+  filter value that cannot be converted to the target property's type, or an operator that does not
+  apply to that type (such as `Contains` on a non-string property) now throws a
+  `PaginationStrictModeException` carrying the property name, the value and the target type, instead
+  of being silently dropped. Default is `false` — existing callers keep today's silent behaviour.
+
 ### Fixed
 
 - `FilterCriteria.Value` arriving as JSON (a `JsonElement`, as when `PaginationOptions` is bound from
