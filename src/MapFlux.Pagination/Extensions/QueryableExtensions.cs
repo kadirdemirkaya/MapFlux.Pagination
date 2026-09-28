@@ -6,8 +6,18 @@ using MapFlux;
 
 namespace MapFlux.Pagination.Extensions;
 
+/// <summary>EF Core-backed offset and cursor pagination over an <see cref="IQueryable{T}"/>.</summary>
 public static class QueryableExtensions
 {
+    /// <summary>
+    /// Applies the full offset pagination pipeline (filter, search, sort) to <paramref name="source"/>
+    /// and reads the requested page, awaiting asynchronously when the provider supports it (e.g. EF Core)
+    /// and synchronously otherwise.
+    /// </summary>
+    /// <param name="source">The query to page.</param>
+    /// <param name="opts">The pagination options the page is read with.</param>
+    /// <param name="ct">A token to cancel the query.</param>
+    /// <returns>The requested page.</returns>
     public static async Task<IPagedResult<T>> ToPagedAsync<T>(
         this IQueryable<T> source,
         PaginationOptions opts,
@@ -21,6 +31,15 @@ public static class QueryableExtensions
         return new PagedResult<T>(items, total, opts.PageNumber, opts.PageSize);
     }
 
+    /// <summary>
+    /// Applies the full offset pagination pipeline to <paramref name="source"/>, reads the requested
+    /// page and maps each item to <typeparamref name="TDest"/>.
+    /// </summary>
+    /// <param name="source">The query to page.</param>
+    /// <param name="mapper">The mapper used to project each page item.</param>
+    /// <param name="opts">The pagination options the page is read with.</param>
+    /// <param name="ct">A token to cancel the query.</param>
+    /// <returns>The requested, mapped page.</returns>
     public static async Task<IPagedResult<TDest>> ToPagedAsync<TSource, TDest>(
         this IQueryable<TSource> source,
         IMapper mapper,
@@ -33,6 +52,16 @@ public static class QueryableExtensions
         return new PagedResult<TDest>(mapped, paged.TotalCount, paged.PageNumber, paged.PageSize);
     }
 
+    /// <summary>
+    /// Reads one keyset (cursor) page from <paramref name="source"/> ordered by
+    /// <see cref="CursorPaginationOptions.CursorProperty"/> (and <see cref="CursorPaginationOptions.SortBy"/>
+    /// when set).
+    /// </summary>
+    /// <param name="source">The query to page.</param>
+    /// <param name="opts">The cursor pagination options the page is read with.</param>
+    /// <param name="ct">A token to cancel the query.</param>
+    /// <returns>The requested cursor page.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="CursorPaginationOptions.PageSize"/> is less than 1.</exception>
     public static async Task<ICursorPagedResult<T>> ToCursorPagedAsync<T>(
         this IQueryable<T> source,
         CursorPaginationOptions opts,
@@ -70,6 +99,15 @@ public static class QueryableExtensions
         return new CursorPagedResult<T>(items, startCursor, endCursor, hasNextPage, hasPreviousPage, total);
     }
 
+    /// <summary>
+    /// Reads one keyset (cursor) page from <paramref name="source"/> and maps each item to
+    /// <typeparamref name="TDest"/>.
+    /// </summary>
+    /// <param name="source">The query to page.</param>
+    /// <param name="mapper">The mapper used to project each page item.</param>
+    /// <param name="opts">The cursor pagination options the page is read with.</param>
+    /// <param name="ct">A token to cancel the query.</param>
+    /// <returns>The requested, mapped cursor page.</returns>
     public static async Task<ICursorPagedResult<TDest>> ToCursorPagedAsync<TSource, TDest>(
         this IQueryable<TSource> source,
         IMapper mapper,
