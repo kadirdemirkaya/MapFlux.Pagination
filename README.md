@@ -1,6 +1,10 @@
 # MapFlux.Pagination
 
-<img src="assets/icon.png" alt="MapFlux.Pagination" width="96" height="96" />
+<p align="center"><img src="assets/icon.png" alt="MapFlux.Pagination logo" width="112" /></p>
+
+| Package | Downloads | License |
+|---------|-----------|---------|
+| [![NuGet](https://img.shields.io/nuget/v/MapFlux.Pagination)](https://www.nuget.org/packages/MapFlux.Pagination) | [![Downloads](https://img.shields.io/nuget/dt/MapFlux.Pagination)](https://www.nuget.org/packages/MapFlux.Pagination) | [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/kadirdemirkaya/MapFlux.Pagination/blob/main/LICENSE) |
 
 Filter, sort, search and paginate an `IQueryable`, with the page mapped straight to DTOs through MapFlux.
 
