@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Package icon (`assets/icon.png`, `<PackageIcon>`) shown on NuGet, and the same image as the README
+  logo on GitHub.
 - Opt-in `PaginationGlobalOptions.ValidateOnStart` (default `false`, today's behaviour unchanged) calls
   `AssertConfigurationIsValid()` on the configured `IMapper` as soon as it is resolved from the
   container, so an incomplete map fails at startup instead of on the first `MapPagedAsync` call.

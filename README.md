@@ -1,5 +1,7 @@
 # MapFlux.Pagination
 
+<img src="https://raw.githubusercontent.com/kadirdemirkaya/PaginationFlux/main/assets/icon.png" alt="MapFlux.Pagination" width="96" height="96" />
+
 Filter, sort, search and paginate an `IQueryable`, with the page mapped straight to DTOs through MapFlux.
 
 ## Installation
