@@ -15,8 +15,8 @@
 		<Title>MapFlux.Pagination</Title>
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
 		<RepositoryType>git</RepositoryType>
-		<RepositoryUrl>https://github.com/kadirdemirkaya/PaginationFlux</RepositoryUrl>
-		<PackageProjectUrl>https://github.com/kadirdemirkaya/PaginationFlux</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/kadirdemirkaya/MapFlux.Pagination</RepositoryUrl>
+		<PackageProjectUrl>https://github.com/kadirdemirkaya/MapFlux.Pagination</PackageProjectUrl>
 		<PublishRepositoryUrl>true</PublishRepositoryUrl>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageIcon>icon.png</PackageIcon>
