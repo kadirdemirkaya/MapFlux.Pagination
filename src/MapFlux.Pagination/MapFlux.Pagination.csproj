@@ -4,11 +4,13 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<PackageId>MapFlux.Pagination</PackageId>
-		<Version>1.1.0</Version>
+		<Version>1.2.0</Version>
+		<AssemblyInformationalVersion>1.2.0</AssemblyInformationalVersion>
 		<Authors>kadirdemirkaya</Authors>
 		<Description>Automatic object mapping and advanced pagination library for .NET, powered by MapFlux and EF Core. Supports dynamic filtering, sorting, global search, and cursor-based (keyset) pagination.</Description>
 		<PackageTags>pagination;mapping;mapflux;ef-core;dotnet;keyset-pagination;cursor-pagination;filtering;sorting;search</PackageTags>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<PackageReleaseNotes>Adds opt-in strict mode for unknown/invalid filter, sort and search input; opt-in deterministic offset-page ordering; opt-in cursor strict mode; opt-out cursor total count; an in-memory ToPaged pipeline overload; and a package icon. Fixes JSON, enum and culture-dependent filter values, unknown first sort criteria, culture-dependent search casing, MaxPageSize enforcement, Skip overflow, cursor precision/culture/direction/Before-page/comparable-type bugs, repeated-registration profile loss, and PagedResult zero-page-size overflow. Adds a net10.0 target, SourceLink, deterministic builds and full public API XML docs. See CHANGELOG.md.</PackageReleaseNotes>
 
 		<Title>MapFlux.Pagination</Title>
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>

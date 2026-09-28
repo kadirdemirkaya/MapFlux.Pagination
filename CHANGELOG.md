@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-28
+
 ### Added
 
 - Package icon (`assets/icon.png`, `<PackageIcon>`) shown on NuGet, and the same image as the README
@@ -199,5 +201,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`IPaginatedMapper`, `MapPagedAsync`, `MapPaged`, `ToPagedAsync`, `ToPaged`).
 - Dependency injection registration via `AddMapFluxPagination`.
 
-[Unreleased]: https://github.com/kadirdemirkaya/PaginationFlux/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/kadirdemirkaya/PaginationFlux/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/kadirdemirkaya/PaginationFlux/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/kadirdemirkaya/PaginationFlux/releases/tag/v1.1.0
