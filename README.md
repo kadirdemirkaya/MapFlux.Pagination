@@ -1,6 +1,6 @@
 # MapFlux.Pagination
 
-<img src="https://raw.githubusercontent.com/kadirdemirkaya/PaginationFlux/main/assets/icon.png" alt="MapFlux.Pagination" width="96" height="96" />
+<img src="https://raw.githubusercontent.com/kadirdemirkaya/MapFlux.Pagination/main/assets/icon.png" alt="MapFlux.Pagination" width="96" height="96" />
 
 Filter, sort, search and paginate an `IQueryable`, with the page mapped straight to DTOs through MapFlux.
 
@@ -415,4 +415,4 @@ Two things follow from letting the database do the comparison:
 
 ## License
 
-This project is licensed under the [MIT License](https://github.com/kadirdemirkaya/PaginationFlux/blob/main/LICENSE).
+This project is licensed under the [MIT License](https://github.com/kadirdemirkaya/MapFlux.Pagination/blob/main/LICENSE).
