@@ -171,6 +171,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every public type and member now has an XML doc comment, so IntelliSense shows a description for
   the whole public surface instead of only `IPaginatedMapper<,>.MapCursorPagedAsync`. This eliminates
   the `CS1591` warning the compiler previously raised for the rest of the public API on every build.
+- The library and the test suite now also target `net10.0`, with its own EF Core, dependency-injection
+  and caching package group alongside the existing net6.0/net7.0/net8.0/net9.0 groups.
 
 ## [1.1.0] - 2026-05-21
 
