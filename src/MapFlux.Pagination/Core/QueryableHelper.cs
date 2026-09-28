@@ -7,6 +7,10 @@ using MapFlux.Pagination.Models;
 
 namespace MapFlux.Pagination.Core;
 
+/// <summary>
+/// Builds the filter, search, sort and cursor expressions applied to an <see cref="IQueryable{T}"/>
+/// during pagination. The extension methods in <c>MapFlux.Pagination.Extensions</c> compose these.
+/// </summary>
 public static class QueryableHelper
 {
     private const string CursorVersionPrefix = "\u0001v1:";
@@ -36,9 +40,25 @@ public static class QueryableHelper
 
     private static readonly ConstantExpression ZeroConstant = Expression.Constant(0);
 
+    /// <summary>
+    /// Orders <paramref name="source"/> by the single property named in <paramref name="sortBy"/>. An
+    /// unknown property name is silently ignored and the source is returned unordered.
+    /// </summary>
+    /// <param name="source">The query to order.</param>
+    /// <param name="sortBy">The property name to order by, case-insensitive, or <see langword="null"/>.</param>
+    /// <param name="descending">Whether to order descending instead of ascending.</param>
+    /// <returns>The ordered query, or <paramref name="source"/> unchanged when <paramref name="sortBy"/> is unset or unknown.</returns>
     public static IQueryable<T> ApplySorting<T>(IQueryable<T> source, string? sortBy, bool descending)
         => ApplySorting(source, sortBy, descending, strict: false);
 
+    /// <summary>
+    /// Orders <paramref name="source"/> by the single property named in <paramref name="sortBy"/>.
+    /// </summary>
+    /// <param name="source">The query to order.</param>
+    /// <param name="sortBy">The property name to order by, case-insensitive, or <see langword="null"/>.</param>
+    /// <param name="descending">Whether to order descending instead of ascending.</param>
+    /// <param name="strict">When <see langword="true"/>, an unknown property name throws <see cref="PaginationStrictModeException"/> instead of being ignored.</param>
+    /// <returns>The ordered query, or <paramref name="source"/> unchanged when <paramref name="sortBy"/> is unset.</returns>
     public static IQueryable<T> ApplySorting<T>(IQueryable<T> source, string? sortBy, bool descending, bool strict)
     {
         if (string.IsNullOrWhiteSpace(sortBy))
@@ -58,9 +78,25 @@ public static class QueryableHelper
         return OrderByProperty(source, property, descending);
     }
 
+    /// <summary>
+    /// Orders <paramref name="source"/> by each <see cref="SortCriteria"/> in turn, the first as
+    /// <c>OrderBy</c>/<c>OrderByDescending</c> and the rest as <c>ThenBy</c>/<c>ThenByDescending</c>.
+    /// An unknown property name in a criteria is skipped.
+    /// </summary>
+    /// <param name="source">The query to order.</param>
+    /// <param name="sortCriterias">The ordered list of sort criteria, or <see langword="null"/>.</param>
+    /// <returns>The ordered query, or <paramref name="source"/> unchanged when no criteria resolve to a known property.</returns>
     public static IQueryable<T> ApplyMultiSorting<T>(IQueryable<T> source, IReadOnlyList<SortCriteria>? sortCriterias)
         => ApplyMultiSorting(source, sortCriterias, strict: false);
 
+    /// <summary>
+    /// Orders <paramref name="source"/> by each <see cref="SortCriteria"/> in turn, the first as
+    /// <c>OrderBy</c>/<c>OrderByDescending</c> and the rest as <c>ThenBy</c>/<c>ThenByDescending</c>.
+    /// </summary>
+    /// <param name="source">The query to order.</param>
+    /// <param name="sortCriterias">The ordered list of sort criteria, or <see langword="null"/>.</param>
+    /// <param name="strict">When <see langword="true"/>, an unknown property name throws <see cref="PaginationStrictModeException"/> instead of being skipped.</param>
+    /// <returns>The ordered query, or <paramref name="source"/> unchanged when no criteria resolve to a known property.</returns>
     public static IQueryable<T> ApplyMultiSorting<T>(IQueryable<T> source, IReadOnlyList<SortCriteria>? sortCriterias, bool strict)
     {
         if (sortCriterias == null || sortCriterias.Count == 0)
@@ -107,9 +143,24 @@ public static class QueryableHelper
         return result;
     }
 
+    /// <summary>
+    /// Applies each <see cref="FilterCriteria"/> to <paramref name="source"/> as a <c>Where</c> clause.
+    /// An unknown property name, an inconvertible value or an unsupported operator/type combination is
+    /// silently dropped and never narrows the result.
+    /// </summary>
+    /// <param name="source">The query to filter.</param>
+    /// <param name="filters">The filters to apply, or <see langword="null"/>.</param>
+    /// <returns>The filtered query, or <paramref name="source"/> unchanged when there are no filters.</returns>
     public static IQueryable<T> ApplyFiltering<T>(IQueryable<T> source, IReadOnlyList<FilterCriteria>? filters)
         => ApplyFiltering(source, filters, strict: false);
 
+    /// <summary>
+    /// Applies each <see cref="FilterCriteria"/> to <paramref name="source"/> as a <c>Where</c> clause.
+    /// </summary>
+    /// <param name="source">The query to filter.</param>
+    /// <param name="filters">The filters to apply, or <see langword="null"/>.</param>
+    /// <param name="strict">When <see langword="true"/>, an unknown property, an inconvertible value or an unsupported operator/type combination throws <see cref="PaginationStrictModeException"/> instead of being dropped.</param>
+    /// <returns>The filtered query, or <paramref name="source"/> unchanged when there are no filters.</returns>
     public static IQueryable<T> ApplyFiltering<T>(IQueryable<T> source, IReadOnlyList<FilterCriteria>? filters, bool strict)
     {
         if (filters == null || filters.Count == 0)
@@ -145,9 +196,28 @@ public static class QueryableHelper
         return result;
     }
 
+    /// <summary>
+    /// Filters <paramref name="source"/> to rows where <paramref name="searchTerm"/> case-insensitively
+    /// matches any of <paramref name="searchProperties"/>, OR'ed together, or every public <see cref="string"/>
+    /// property when none are named.
+    /// </summary>
+    /// <param name="source">The query to search.</param>
+    /// <param name="searchTerm">The term to search for, or <see langword="null"/>/empty to skip searching.</param>
+    /// <param name="searchProperties">The <see cref="string"/> property names to search, or <see langword="null"/> to search every public <see cref="string"/> property.</param>
+    /// <returns>The filtered query, or <paramref name="source"/> unchanged when there is no search term.</returns>
     public static IQueryable<T> ApplySearch<T>(IQueryable<T> source, string? searchTerm, IReadOnlyList<string>? searchProperties)
         => ApplySearch(source, searchTerm, searchProperties, strict: false);
 
+    /// <summary>
+    /// Filters <paramref name="source"/> to rows where <paramref name="searchTerm"/> case-insensitively
+    /// matches any of <paramref name="searchProperties"/>, OR'ed together, or every public <see cref="string"/>
+    /// property when none are named.
+    /// </summary>
+    /// <param name="source">The query to search.</param>
+    /// <param name="searchTerm">The term to search for, or <see langword="null"/>/empty to skip searching.</param>
+    /// <param name="searchProperties">The <see cref="string"/> property names to search, or <see langword="null"/> to search every public <see cref="string"/> property.</param>
+    /// <param name="strict">When <see langword="true"/>, an unknown or non-string named property throws <see cref="PaginationStrictModeException"/> instead of being skipped.</param>
+    /// <returns>The filtered query, or <paramref name="source"/> unchanged when there is no search term.</returns>
     public static IQueryable<T> ApplySearch<T>(IQueryable<T> source, string? searchTerm, IReadOnlyList<string>? searchProperties, bool strict)
     {
         if (string.IsNullOrWhiteSpace(searchTerm))
@@ -215,6 +285,14 @@ public static class QueryableHelper
         return source.Where(lambda);
     }
 
+    /// <summary>
+    /// Applies the full offset pagination pipeline to <paramref name="source"/>: filter, then search,
+    /// then sort (<see cref="PaginationOptions.SortCriterias"/> wins over <see cref="PaginationOptions.SortBy"/>),
+    /// falling back to <see cref="ApplyDefaultOrdering{T}"/> when the request produced no ordering.
+    /// </summary>
+    /// <param name="source">The query to page.</param>
+    /// <param name="opts">The pagination options the page is read with.</param>
+    /// <returns>The filtered, searched and ordered query.</returns>
     public static IQueryable<T> ApplyFullPipeline<T>(IQueryable<T> source, PaginationOptions opts)
     {
         var query = ApplyFiltering(source, opts.Filters, opts.StrictMode);
@@ -240,6 +318,14 @@ public static class QueryableHelper
         return query;
     }
 
+    /// <summary>
+    /// Orders <paramref name="source"/> by <see cref="PaginationOptions.DefaultSortProperty"/> when set,
+    /// otherwise by the resolved key property when <see cref="PaginationOptions.EnsureDeterministicOrder"/>
+    /// is set. Called when the requested sort produced no ordering, so an offset page is deterministic.
+    /// </summary>
+    /// <param name="source">The query to order.</param>
+    /// <param name="opts">The pagination options the page is read with.</param>
+    /// <returns>The ordered query, or <paramref name="source"/> unchanged when no default ordering applies.</returns>
     public static IQueryable<T> ApplyDefaultOrdering<T>(IQueryable<T> source, PaginationOptions opts)
     {
         if (!string.IsNullOrWhiteSpace(opts.DefaultSortProperty))

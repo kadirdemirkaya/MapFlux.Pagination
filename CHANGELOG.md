@@ -163,6 +163,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Patched a High severity transitive dependency vulnerability (net6.0, net8.0, net9.0) and updated
   the `MapFlux` dependency to its latest patch release.
 
+### Added
+
+- The package now carries `RepositoryUrl`, `PackageProjectUrl` and `PublishRepositoryUrl`, and ships
+  SourceLink (GitHub) so a debugger can step into the package's exact source for the commit it was
+  built from, plus a deterministic build and `EmbedUntrackedSources` for reproducible packing.
+- Every public type and member now has an XML doc comment, so IntelliSense shows a description for
+  the whole public surface instead of only `IPaginatedMapper<,>.MapCursorPagedAsync`. This eliminates
+  the `CS1591` warning the compiler previously raised for the rest of the public API on every build.
+
 ## [1.1.0] - 2026-05-21
 
 ### Added

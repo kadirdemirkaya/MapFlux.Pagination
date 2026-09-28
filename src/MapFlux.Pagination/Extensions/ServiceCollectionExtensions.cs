@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace MapFlux.Pagination.Extensions;
 
+/// <summary>Registers the pagination mapper and its <see cref="PaginationGlobalOptions"/> in an <see cref="IServiceCollection"/>.</summary>
 public static class ServiceCollectionExtensions
 {
     private sealed class PaginationRegistrationAccumulator
@@ -29,6 +30,14 @@ public static class ServiceCollectionExtensions
         return accumulator;
     }
 
+    /// <summary>
+    /// Registers a singleton <see cref="MapFlux.IMapper"/> configured by <paramref name="configure"/> and
+    /// an open-generic scoped <c>IPaginatedMapper&lt;,&gt;</c>. Safe to call more than once: profiles from
+    /// every call accumulate on the same mapper instead of the later registration replacing the earlier one.
+    /// </summary>
+    /// <param name="services">The service collection to register into.</param>
+    /// <param name="configure">Registers mapping profiles on the shared <see cref="MapperConfigurationBuilder"/>, or <see langword="null"/>.</param>
+    /// <returns><paramref name="services"/>, for fluent chaining.</returns>
     public static IServiceCollection AddMapFluxPagination(
         this IServiceCollection services,
         Action<MapperConfigurationBuilder>? configure = null)
@@ -56,6 +65,14 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Registers the pagination mapper the same way as the single-argument <c>AddMapFluxPagination</c>
+    /// overload, plus a singleton <see cref="PaginationGlobalOptions"/> configured by <paramref name="globalOptions"/>.
+    /// </summary>
+    /// <param name="services">The service collection to register into.</param>
+    /// <param name="configure">Registers mapping profiles on the shared <see cref="MapperConfigurationBuilder"/>, or <see langword="null"/>.</param>
+    /// <param name="globalOptions">Configures the shared <see cref="PaginationGlobalOptions"/>, or <see langword="null"/>.</param>
+    /// <returns><paramref name="services"/>, for fluent chaining.</returns>
     public static IServiceCollection AddMapFluxPagination(
         this IServiceCollection services,
         Action<MapperConfigurationBuilder>? configure,
