@@ -4,8 +4,6 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<PackageId>MapFlux.Pagination</PackageId>
-		<Version>1.2.0</Version>
-		<AssemblyInformationalVersion>1.2.0</AssemblyInformationalVersion>
 		<Authors>kadirdemirkaya</Authors>
 		<Description>Automatic object mapping and advanced pagination library for .NET, powered by MapFlux and EF Core. Supports dynamic filtering, sorting, global search, and cursor-based (keyset) pagination.</Description>
 		<PackageTags>pagination;mapping;mapflux;ef-core;dotnet;keyset-pagination;cursor-pagination;filtering;sorting;search</PackageTags>
