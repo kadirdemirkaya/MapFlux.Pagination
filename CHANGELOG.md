@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-12
+
+### Changed
+
+- The package now depends on `MapFlux` **1.2.0** (was 1.1.0) on every target framework, net6.0 through
+  net10.0. The public API and behaviour of MapFlux.Pagination are unchanged; package validation
+  against the published 1.2.0 reports no breaking change.
+
+### Security
+
+- The build-time `Microsoft.SourceLink.GitHub` package moved from 8.0.0 to 10.0.115 (private asset, not
+  a consumer dependency).
+- The test project pins the patched `SQLitePCLRaw.bundle_e_sqlite3` 2.1.12, replacing a transitive
+  version with a known advisory. Test-only; the shipped package is unaffected.
+
 ## [1.2.0] - 2026-09-28
 
 ### Added
@@ -201,6 +216,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`IPaginatedMapper`, `MapPagedAsync`, `MapPaged`, `ToPagedAsync`, `ToPaged`).
 - Dependency injection registration via `AddMapFluxPagination`.
 
-[Unreleased]: https://github.com/kadirdemirkaya/MapFlux.Pagination/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/kadirdemirkaya/MapFlux.Pagination/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/kadirdemirkaya/MapFlux.Pagination/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/kadirdemirkaya/MapFlux.Pagination/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/kadirdemirkaya/MapFlux.Pagination/releases/tag/v1.1.0
