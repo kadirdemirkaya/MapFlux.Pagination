@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in projected paging: `IQueryable<T>.ToProjectedPagedAsync<TSource, TDest>(IProjectionMapper, PaginationOptions)`
+  and `ToProjectedCursorPagedAsync<TSource, TDest>(IProjectionMapper, CursorPaginationOptions)`, plus the new
+  `IProjectedPaginatedMapper<TSource, TDest>` (`ProjectPagedAsync`, `ProjectCursorPagedAsync`), implemented by
+  `PaginatedMapper<,>` and registered as an open-generic scoped service by `AddMapFluxPagination`. The
+  registered map is translated by the query provider, so the page query selects only the columns the DTO
+  needs instead of whole entities. Filters, search, sorting, `CursorProperty` and the cursor `SortBy` still
+  name entity properties; the total is counted on the entity query, so it stays two queries. Cursor pages
+  read the cursor and sort keys from the entity alongside the projection: the DTO needs neither property and
+  the cursors are the same ones `MapCursorPagedAsync` issues. Global `MaxPageSize` and default ordering apply
+  as for `MapPagedAsync`.
+- A map that cannot be expressed as a projection, or a registered `IMapper` that cannot build projections,
+  throws `InvalidOperationException` before any query runs; there is no fallback to mapping in memory.
+
+### Changed
+
+- The package now depends on `MapFlux` **1.3.0** (was 1.2.0), which provides the projection API. Existing
+  methods (`MapPagedAsync`, `MapCursorPagedAsync`, `MapPaged`, `ToPagedAsync`, `ToCursorPagedAsync`,
+  `ToPaged`, `MapList`) keep mapping in memory, unchanged.
+
 ## [1.3.0] - 2026-11-12
 
 ### Changed

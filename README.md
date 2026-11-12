@@ -75,13 +75,15 @@ Response:
 
 `MapPagedAsync` runs two queries against `_db.Users` — a `COUNT(*)` for `totalCount` and the page
 itself — then maps the page in memory; it is not a single roundtrip. Skip the count on cursor paging
-with `IncludeTotalCount = false` (see below) when you don't need it.
+with `IncludeTotalCount = false` (see below) when you don't need it. To read only the columns the DTO
+needs instead of whole entities, use *Projected Paging* (below) — still two queries.
 
 ---
 
 ## Features
 
 - ⚡ **Automatic Mapping**: Maps database entities directly to DTOs using MapFlux.
+- 🎯 **Projected Paging**: Opt-in — the database selects only the columns the DTO map reads.
 - 🔍 **Dynamic Filtering**: Property-based filtering with operators like Equals, Contains, GreaterThan, etc.
 - 🔀 **Multi-Column Sorting**: Order by multiple fields dynamically.
 - 🔎 **Global Search**: Case-insensitive search across multiple string properties.
@@ -119,6 +121,70 @@ builder.Services.AddMapFluxPagination(
 var app = builder.Build();
 app.Services.GetRequiredService<IMapper>();
 ```
+
+---
+
+## Projected Paging
+
+`MapPagedAsync` loads every column of each entity on the page and maps it in memory. The opt-in
+projected variants hand the registered map to the query provider instead, so the page query selects only
+the columns the DTO needs:
+
+```csharp
+using MapFlux.Pagination.Abstractions;
+
+public class UsersController : ControllerBase
+{
+    private readonly IProjectedPaginatedMapper<User, UserDto> _mapper;
+    private readonly AppDbContext _db;
+
+    public UsersController(IProjectedPaginatedMapper<User, UserDto> mapper, AppDbContext db)
+    {
+        _mapper = mapper;
+        _db = db;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetUsers([FromQuery] int page = 1, [FromQuery] int size = 10)
+    {
+        var opts = new PaginationOptions { PageNumber = page, PageSize = size, SortBy = "Name" };
+        return Ok(await _mapper.ProjectPagedAsync(_db.Users, opts));
+    }
+}
+```
+
+`AddMapFluxPagination` registers `IProjectedPaginatedMapper<,>` next to `IPaginatedMapper<,>`, and the
+same global options (`MaxPageSize`, default ordering) apply. Without dependency injection, call the
+`IQueryable` extensions with the MapFlux `Mapper`:
+
+```csharp
+var page = await _db.Users.ToProjectedPagedAsync<User, UserDto>(mapper, opts);
+var cursorPage = await _db.Users.ToProjectedCursorPagedAsync<User, UserDto>(
+    mapper, new CursorPaginationOptions { PageSize = 20, SortBy = "CreatedAt" });
+```
+
+How it behaves:
+
+- Still two queries: a `COUNT(*)` on the filtered entity query, then the projected page.
+- `Filters`, `SearchTerm`, `SortBy`/`SortCriterias`, `CursorProperty` and the cursor `SortBy` name
+  **entity** properties, exactly as in `MapPagedAsync`. The DTO does not need the cursor or sort property —
+  the cursor is read from the entity alongside the projection, and cursors are interchangeable with the
+  ones `MapCursorPagedAsync` issues.
+- Nothing changes for existing calls: `MapPagedAsync`, `MapCursorPagedAsync`, `ToPagedAsync(mapper, …)`
+  and `ToPaged` keep mapping in memory.
+- A map that cannot be expressed as a query projection throws `InvalidOperationException` naming the
+  offending members **before any query runs** — there is no silent fallback to mapping in memory. The
+  same error is raised when the registered `IMapper` cannot build projections.
+
+A projection runs inside the database, so a few details differ from mapping in memory:
+
+- **Nulls and string comparison** follow the database: `null` propagation and comparisons use the
+  database's semantics and collation, not .NET's.
+- **Declared types**: nested and collection maps are chosen from the declared member types, not the
+  runtime types of the loaded objects.
+- **Member initializers**: a projection assigns every mapped member, so a `null` source value becomes
+  `null` (or the default value) in the DTO. Mapping in memory leaves such a member untouched, which keeps
+  an initializer like `= string.Empty`; projected, the initializer only survives on unmapped members.
 
 ---
 

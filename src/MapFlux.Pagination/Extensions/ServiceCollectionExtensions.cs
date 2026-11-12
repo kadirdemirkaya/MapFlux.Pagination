@@ -32,7 +32,7 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Registers a singleton <see cref="MapFlux.IMapper"/> configured by <paramref name="configure"/> and
-    /// an open-generic scoped <c>IPaginatedMapper&lt;,&gt;</c>. Safe to call more than once: profiles from
+    /// open-generic scoped <c>IPaginatedMapper&lt;,&gt;</c> and <c>IProjectedPaginatedMapper&lt;,&gt;</c>. Safe to call more than once: profiles from
     /// every call accumulate on the same mapper instead of the later registration replacing the earlier one.
     /// </summary>
     /// <param name="services">The service collection to register into.</param>
@@ -60,6 +60,10 @@ public static class ServiceCollectionExtensions
 
         services.TryAddScoped(
             typeof(IPaginatedMapper<,>),
+            typeof(PaginatedMapper<,>));
+
+        services.TryAddScoped(
+            typeof(IProjectedPaginatedMapper<,>),
             typeof(PaginatedMapper<,>));
 
         return services;

@@ -10,7 +10,7 @@ namespace MapFlux.Pagination.Core;
 /// </summary>
 /// <typeparam name="TSource">The source entity type read from the query.</typeparam>
 /// <typeparam name="TDest">The destination type each item is mapped to.</typeparam>
-public class PaginatedMapper<TSource, TDest> : IPaginatedMapper<TSource, TDest>
+public class PaginatedMapper<TSource, TDest> : IPaginatedMapper<TSource, TDest>, IProjectedPaginatedMapper<TSource, TDest>
 {
     private readonly IMapper _mapper;
     private readonly PaginationGlobalOptions? _globalOptions;
@@ -94,4 +94,42 @@ public class PaginatedMapper<TSource, TDest> : IPaginatedMapper<TSource, TDest>
             pagedSource.HasPreviousPage,
             pagedSource.TotalCount);
     }
+
+    /// <inheritdoc />
+    public async Task<IPagedResult<TDest>> ProjectPagedAsync(
+        IQueryable<TSource> source,
+        PaginationOptions opts,
+        CancellationToken ct = default)
+    {
+        var projectionMapper = GetProjectionMapper();
+
+        if (_globalOptions is not null)
+        {
+            opts = opts.ClampPageSize(_globalOptions.MaxPageSize);
+            opts = ResolveDefaultOrdering(opts, _globalOptions);
+        }
+
+        return await source.ToProjectedPagedAsync<TSource, TDest>(projectionMapper, opts, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<ICursorPagedResult<TDest>> ProjectCursorPagedAsync(
+        IQueryable<TSource> source,
+        CursorPaginationOptions opts,
+        CancellationToken ct = default)
+    {
+        var projectionMapper = GetProjectionMapper();
+
+        if (_globalOptions is not null)
+            opts = opts.ClampPageSize(_globalOptions.MaxPageSize);
+
+        return await source.ToProjectedCursorPagedAsync<TSource, TDest>(projectionMapper, opts, ct).ConfigureAwait(false);
+    }
+
+    private IProjectionMapper GetProjectionMapper()
+        => _mapper as IProjectionMapper
+            ?? throw new InvalidOperationException(
+                $"Projected paging needs a mapper that implements {nameof(IProjectionMapper)}, but the registered " +
+                $"{nameof(IMapper)} is '{_mapper.GetType().FullName}'. Register a mapper that can build projections, " +
+                $"or use {nameof(MapPagedAsync)} / {nameof(MapCursorPagedAsync)}, which map the page in memory.");
 }

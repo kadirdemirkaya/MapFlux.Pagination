@@ -501,6 +501,48 @@ public static class QueryableHelper
             : EncodeCompositeCursor(sortValue, cursorValue);
     }
 
+    internal static Expression<Func<TSource, ProjectedCursorRow<TDest>>> BuildCursorRowProjection<TSource, TDest>(
+        Expression<Func<TSource, TDest>> projection,
+        CursorPaginationOptions opts)
+    {
+        var parameter = projection.Parameters[0];
+        var rowType = typeof(ProjectedCursorRow<TDest>);
+        var bindings = new List<MemberBinding>
+        {
+            Expression.Bind(rowType.GetProperty(nameof(ProjectedCursorRow<TDest>.Item))!, projection.Body)
+        };
+
+        var cursorProperty = FindSortableProperty<TSource>(opts.CursorProperty);
+
+        if (cursorProperty != null)
+        {
+            bindings.Add(Expression.Bind(
+                rowType.GetProperty(nameof(ProjectedCursorRow<TDest>.CursorValue))!,
+                Expression.Convert(Expression.MakeMemberAccess(parameter, cursorProperty), typeof(object))));
+
+            var sortProperty = FindSortableProperty<TSource>(opts.SortBy);
+
+            if (sortProperty != null && !IsSameProperty(sortProperty, cursorProperty))
+                bindings.Add(Expression.Bind(
+                    rowType.GetProperty(nameof(ProjectedCursorRow<TDest>.SortValue))!,
+                    Expression.Convert(Expression.MakeMemberAccess(parameter, sortProperty), typeof(object))));
+        }
+
+        var body = Expression.MemberInit(Expression.New(rowType), bindings);
+
+        return Expression.Lambda<Func<TSource, ProjectedCursorRow<TDest>>>(body, parameter);
+    }
+
+    internal static string? BuildRowCursor<TDest>(ProjectedCursorRow<TDest> row)
+    {
+        if (row.CursorValue == null)
+            return null;
+
+        return row.SortValue == null
+            ? EncodeCursor(row.CursorValue)
+            : EncodeCompositeCursor(row.SortValue, row.CursorValue);
+    }
+
     private static IQueryable<T> ApplyCursorOrdering<T>(
         IQueryable<T> source,
         PropertyInfo? sortProperty,
